@@ -36,13 +36,14 @@ func UDPserver(port string, passcode string){
 	for {
 		code, err := reader.ReadString('\n')
 		CheckError(err, "reader.ReadString")
-		//fmt.Println("Code:" + code)
+		//fmt.Println("read:" + code)
 		if code == (passcode + "\n") {
 			msg, err := reader.ReadString('\n')
 			CheckError(err, "reader.ReadString")	
-			fmt.Println("Received:\n" + msg)
+			fmt.Println(msg)		
+		} else {
 			reader.Reset(sockln)		
-		}	
+		}
 	}
 }
 
@@ -52,33 +53,18 @@ func broadcastLocalAddressUDP(targetAddr string, passcode string){
 	localIP, err := getLocalIP()
 	CheckError(err, " ")
 
-	/* Not needed
-	addrLocal, err := net.ResolveUDPAddr("udp", addr+":20023")
-	CheckError(err, " ")
-	_ = addrLocal
-	*/
-
 	addrServer, err := net.ResolveUDPAddr("udp",targetAddr)
 	CheckError(err, "Resolve server addr")
 	
-
 	conn, err := net.DialUDP("udp", nil, addrServer)
-	CheckError(err, "Dial")
+	CheckError(err, "UDPDial")
 	
 	b := []byte(passcode + "\n" + localIP + "\n")
+
 	_, err = conn.Write(b)
 	//fmt.Println("Sent: ", string(b))
 	CheckError(err, "conn.Write()")
 	conn.Close()
-	/*
-	//conn.Close()
-	
-	//sockln, err := net.ListenUDP("udp", addrLocal)
-	//CheckError(err, " ")
-
-	n, addr2, err := conn.ReadFromUDP(buf)
-	fmt.Println("Received: ", string(buf[0:n]), "\nAddress: ", addr2, "\n")
-	conn.Close()*/
 }
 
 func getLocalIP() (string, error) {
