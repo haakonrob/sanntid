@@ -12,18 +12,59 @@ import (
 
 func main(){
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	portnr := ":20023"
+
+	connectedIPs := make([]string, 0, 20)
+	_ = connectedIPs
+	localIP, err := getLocalIP()	
+	CheckError(err, "No local IP")
+
+	localBroadcast := "129.241.187.255"
+	portnr := ":20022"
 	passcode := "svekonrules"
+	msg := passcode+"\n"+"hello"+"\n"
 	
-	go UDPserver(portnr, passcode)
+	chanUDP := make(chan string, 1)
+
+	go listenUDP(chanUDP, localIP, portnr, passcode)
+
 	for{
-		broadcastLocalAddressUDP("129.241.187.255"+portnr, passcode)
+		/*
+			if connection false, sendUDP(), sleep
+			read listenUDP() channel, add IP addresses to list
+			while list != empty, sort IP address into ring and connect
+				sort IP address list
+				lower neighbour disconnects upper socket
+		*/
+
+		sendUDP(localBroadcast+portnr, msg)
+		imsg := <-chanUDP
+		//unconnectedIPs = append(unconnectedIPs, imsg)
+		//fmt.Println(unconnectedIPs)
+		if len(connectedIPs) == 0 {
+			connectedIPs = append(connectedIPs, imsg)
+		} else {
+			flag := true
+			for i:=0; i<len(connectedIPs); i++ {
+				if connectedIPs[i] == imsg {
+					flag = false
+					break
+				} 
+			}
+			if flag {
+				// connect to IP
+				connectedIPs = append(connectedIPs, imsg)
+				fmt.Println(connectedIPs)	
+			}
+		}
+		fmt.Println(connectedIPs)
 		time.Sleep(time.Second*2)
+		
+		
 	}
 }
 
 
-func UDPserver(port string, passcode string){
+func listenUDP(chanUDP chan string, localIP string, port string, passcode string){
 	addr, err := net.ResolveUDPAddr("udp", port)
     CheckError(err, " ")
 
@@ -37,17 +78,36 @@ func UDPserver(port string, passcode string){
 		code, err := reader.ReadString('\n')
 		CheckError(err, "reader.ReadString")
 		//fmt.Println("read:" + code)
+
 		if code == (passcode + "\n") {
 			msg, err := reader.ReadString('\n')
-			CheckError(err, "reader.ReadString")	
-			fmt.Println(msg)		
+			CheckError(err, "reader.ReadString")
+			// ignore computer's own messages
+			if msg != (localIP + "\n") {	
+				chanUDP <- msg[:len(msg)-1]
+			}		
 		} else {
 			reader.Reset(sockln)		
 		}
 	}
 }
 
+func sendUDP(target string, msg string){
+	
+	addr, err := net.ResolveUDPAddr("udp",target)
+	CheckError(err, "Resolve server addr")
+	
+	conn, err := net.DialUDP("udp", nil, addr)
+	CheckError(err, "UDPDial")
+	
+	b := []byte(msg)
 
+	_, err = conn.Write(b)
+	//fmt.Println("Sent: ", string(b))
+	CheckError(err, "conn.Write()")
+	conn.Close()
+}
+/*
 func broadcastLocalAddressUDP(targetAddr string, passcode string){
 	
 	localIP, err := getLocalIP()
@@ -66,7 +126,7 @@ func broadcastLocalAddressUDP(targetAddr string, passcode string){
 	CheckError(err, "conn.Write()")
 	conn.Close()
 }
-
+*/
 func getLocalIP() (string, error) {
 // Find source of this
 ifaces, err := net.Interfaces()
