@@ -8,7 +8,7 @@ For the 3 elevator problem, all elevators can connect to each other. For N elevs
 Network module specs:
 Sequence
 Init: 
-	"Spam" broadcast with own IP and passcode.
+	"Spam" broadcast with own IP
 	Identify other elevs through UDP broadcast. Save network state.
 	Establish TCP "ring".
 	Start sending the packet.
