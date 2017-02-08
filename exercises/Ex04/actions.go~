@@ -1,0 +1,14 @@
+package actions
+
+import (
+	"os"
+)
+
+type actionFunc func()
+
+func Quit(){
+	os.Exit(0)
+}
+
+func Ignore(){
+}

@@ -11,7 +11,7 @@ import (
 )
 
 func main(){
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	//runtime.GOMAXPROCS(runtime.NumCPU())
 
 	connectedIPs := make([]string, 0, 20)
 	_ = connectedIPs
@@ -66,7 +66,7 @@ func main(){
 
 func listenUDP(chanUDP chan string, localIP string, port string, passcode string){
 	addr, err := net.ResolveUDPAddr("udp", port)
-    CheckError(err, " ")
+    	CheckError(err, " ")
 
 	sockln, err := net.ListenUDP("udp", addr)
 	CheckError(err, " ")

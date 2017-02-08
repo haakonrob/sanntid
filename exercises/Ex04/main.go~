@@ -11,7 +11,7 @@ import (
 )
 
 func main(){
-	runtime.GOMAXPROCS(runtime.NumCPU())
+	//runtime.GOMAXPROCS(runtime.NumCPU())
 
 	connectedIPs := make([]string, 0, 20)
 	_ = connectedIPs
@@ -19,7 +19,7 @@ func main(){
 	CheckError(err, "No local IP")
 
 	localBroadcast := "129.241.187.255"
-	portnr := ":20024"
+	portnr := ":20022"
 	passcode := "svekonrules"
 	msg := passcode+"\n"+"hello"+"\n"
 	
@@ -35,8 +35,8 @@ func main(){
 				sort IP address list
 				lower neighbour disconnects upper socket
 		*/
+
 		sendUDP(localBroadcast+portnr, msg)
-		
 		imsg := <-chanUDP
 		//unconnectedIPs = append(unconnectedIPs, imsg)
 		//fmt.Println(unconnectedIPs)
@@ -66,7 +66,7 @@ func main(){
 
 func listenUDP(chanUDP chan string, localIP string, port string, passcode string){
 	addr, err := net.ResolveUDPAddr("udp", port)
-    CheckError(err, " ")
+    	CheckError(err, " ")
 
 	sockln, err := net.ListenUDP("udp", addr)
 	CheckError(err, " ")
