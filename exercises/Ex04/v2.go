@@ -6,11 +6,17 @@ import (
 	"net"
 	"bufio"
 	"time"
-	"sort"
 	"./localip"
+	"./localnet"
 	"./iferror"
 )
 
+const (
+	TCPportIn = ":20024"
+	TCPportOut = ":20025"
+	UDPport = ":20023"
+	UDPpasscode = "svekonrules"
+)
 
 type elevdata struct {
 	externalOrders [6] int
@@ -26,47 +32,35 @@ type elevPacket struct {
 
 func main(){
 	TCPNodeOnline := false
-	isStartNode := false
-	UDPport := ":20023"
-	TCPportIn := ":20024"
-	TCPportOut := ":20024"
-	localIP, err := localip.Get()
-	broadcastIP, _ := localip.GetBroadcast()
+	localIP, err := localnet.GetLocalIP()
+	broadcastIP, _ := localnet.GetBroadcastIP()
 	checkError(err, "Retrieving local IP", iferror.Ignore)
-	passcode := "svekonrules"
-	UDPmsg := passcode+"\n"+localIP+"\n"
-	IPList := make([] string, 0, 20)
+	UDPmsg := UDPpasscode+"\n"+localIP+"\n"
 	
-	UDPReceiveChan := make(chan string)
-	UDPTransmitEnable := make(chan bool)
+	UDPChan := make(chan string)
+	UDPBroadcastEnable := make(chan bool)
 	TCPChan := make(chan string)
 	stopTCP := make(chan bool)
 	
-	go UDPReceiver(UDPReceiveChan, passcode, UDPport)
-	go UDPBroadcaster(UDPTransmitEnable, UDPmsg, broadcastIP, UDPport)
-	UDPTransmitEnable <- true
+	go UDPReceiver(UDPChan, UDPpasscode, UDPport)
+	go UDPBroadcaster(UDPBroadcastEnable, UDPmsg, broadcastIP, UDPport)
+
+	UDPBroadcastEnable <- true
 
 	for {	
 		select {
-			case newIP := <-UDPReceiveChan:
-				if dontKnowIP(newIP, IPList){
-					IPList = append(IPList, newIP)
-					sort.Strings(IPList)
-					fmt.Println(IPList)
-					if TCPNodeOnline {
-						stopTCP<- true
-					}
-					go TCPNode(TCPChan, stopTCP, TCPportIn, TCPportOut, IPList)
-					
-				} else {
-					// try to reconnect with failing node? Perhaps count the number of times until a restart seems smart.
+			case newIP := <-UDPChan:
+				_ = localnet.AddNewNodeIP(newIP)
+				if TCPNodeOnline {
+					stopTCP<- true
 				}
+				go TCPNode(TCPChan, stopTCP, TCPportIn, TCPportOut)
+				TCPNodeOnline = true
 			case packet := <-TCPChan:
 				fmt.Println(packet)
 				time.Sleep(time.Second/2)
 				TCPChan<- packet
 			default:
-				
 				continue
 		}
 	}
@@ -122,103 +116,114 @@ func UDPBroadcaster(TransmitEnable chan bool, msg string, localBroadcastIP strin
 	}
 }
 
-
-func TCPNode(TCPChan chan string, stopTCP chan bool, portIn string, portOut string, IPList []string){
-	numberOfNodes := len(IPList)+1
-	localIP := localip.Get()
-	var nextNodeIP string
-	if localIP < IPList[0] {
-		isStartNode = true
+func TCPNode(TCPChan chan string, stopTCP chan bool, portIn string, portOut string){
+	if localnet.GetNumberOfNodes() == 2 {
+		TCPNodePair(TCPChan, stopTCP, portIn)
+	} else if localnet.GetNumberOfNodes() > 2 {
+		TCPNodeRing(TCPChan, stopTCP, portIn, portOut)
 	}
-	if numberOfNodes == 2 {
-		nextNodeIP = IPList[0]
-	} else if numberOfNodes > 2 {
-		nextNodeIP = getUpperNode(IPList)
-	}	
 	
-
-	localAddress, err := net.ResolveTCPAddr("tcp", portIn)
-	checkError(err, "Resolving local TCP address", iferror.Ignore)	
 	
-	listener, err := net.ListenTCP("tcp", localAddress)
-	checkError(err, "Creating a TCP listener", iferror.Ignore)
-
-	upperNodeAddr, err := net.ResolveTCPAddr("tcp",nextNodeIP+portOut)
-	checkError(err, "Resolving next node IP", iferror.Quit)
-	fmt.Println("alive")
-	var lowerNodeConn net.Conn
-	var upperNodeConn net.Conn
-	fmt.Println("alive")
-	if isStartNode {
-		upperNodeConn, _ = net.DialTCP("tcp", nil, upperNodeAddr)
-		lowerNodeConn, _ = listener.Accept()
-	} else {
-		lowerNodeConn, _ = listener.Accept()
-		upperNodeConn, _ = net.DialTCP("tcp", nil, upperNodeAddr)
-	}
-	fmt.Println("alive")
+}
+func TCPNodePair(TCPChan chan string, stopTCP chan bool, portIn string){
+	var pairConn net.Conn
 	buf := make([]byte, 1024)
 	n := 0
 
 	listen := func(){
 		n = 0
 		buf = make([]byte, 1024)
-		n,err = lowerNodeConn.Read(buf)
+		n, _ = pairConn.Read(buf)
 		return
 	}	
-	
-	// Start listening on lowerNodeConn
-	go listen()
-	
-	if isStartNode {
-		TCPChan<- "hello"
+
+	if localnet.IsStartNode() {
+		pairConn, _ = setUpTCPConn(localnet.GetNextNodeIP(), portIn)
+		TCPChan<- "startup"	
+		pairConn.Write( []byte(<-TCPChan) )
+	} else {
+		pairConn, _ = listenForTCPConn(portIn)
 	}
+	
+	go listen()
 	for {
 		select {
 			case stop := <-stopTCP:
 				if stop {
-					upperNodeConn.Close()
-					lowerNodeConn.Close() 
+					pairConn.Close()
 					return			
 				}			
 			default:
 				// Read the nonempty buffer, wait for a reply, forward the reply, and restart the listener.
 				if n !=0 {
 					TCPChan<- string(buf)
-					upperNodeConn.Write( []byte(<-TCPChan) )
+					pairConn.Write( []byte(<-TCPChan) )
+					go listen()
+				}
+		}
+	}
+	
+
+
+}
+
+func TCPNodeRing(TCPChan chan string, stopTCP chan bool, portIn string, portOut string){
+	var nextNodeConn, prevNodeConn net.Conn
+	buf := make([]byte, 1024)
+	n := 0
+
+	listen := func(){
+		n = 0
+		buf = make([]byte, 1024)
+		n, _ = prevNodeConn.Read(buf)
+		return
+	}
+
+	if localnet.IsStartNode() {
+		nextNodeConn, _ = setUpTCPConn(localnet.GetNextNodeIP(), portOut)
+		prevNodeConn, _ = listenForTCPConn(portIn)
+	} else {
+		prevNodeConn, _ = listenForTCPConn(portIn)
+		nextNodeConn, _ = setUpTCPConn(localnet.GetNextNodeIP(), portOut)
+	}
+	
+	// Start listening on lowerNodeConn
+	go listen()
+	
+	if localnet.IsStartNode() {
+		TCPChan<- "hello"
+	}
+	for {
+		select {
+			case stop := <-stopTCP:
+				if stop {
+					nextNodeConn.Close()
+					prevNodeConn.Close() 
+					return			
+				}			
+			default:
+				// Read the nonempty buffer, wait for a reply, forward the reply, and restart the listener.
+				if n !=0 {
+					TCPChan<- string(buf)
+					nextNodeConn.Write( []byte(<-TCPChan) )
 					go listen()
 				}
 		}
 	}
 }
 
-func dontKnowIP(IP string, IPlist []string)(bool){
-	for i:=0; i<len(IPlist); i++ {
-		if IPlist[i] == IP {
-			return false
-		} 
-	}
-	return true
+func listenForTCPConn(port string)(net.Conn, error){
+	localAddress, err := net.ResolveTCPAddr("tcp", port)
+	checkError(err, "Resolving local TCP address", iferror.Ignore)	
+	listener, err := net.ListenTCP("tcp", localAddress)
+	checkError(err, "Creating a TCP listener", iferror.Ignore)
+	return listener.Accept()
 }
 
-func getUpperNode(IPList []string)(string){
-	localIP, _ := localip.Get()
-	
-	// smallest member
-	if localIP < IPList[0] {
-		return IPList[0]
-	}
-	// somewhere inbetween
-	for i:=0;i<len(IPList)-1;i++ {
-		if localIP == IPList[i] {
-			return "BadIPlist" //shouldn't happen
-		} else if localIP > IPList[i] && localIP < IPList[i+1] {
-			return IPList[i+1]
-		} 
-	}
-	// reached end of list, wrap around
-	return IPList[0]
-	
+func setUpTCPConn(targetIP string, port string)(net.Conn, error){
+	upperNodeAddr, err := net.ResolveTCPAddr("tcp",targetIP+port)
+	checkError(err, "Resolving next node IP", iferror.Ignore)	
+	return net.DialTCP("tcp", nil, upperNodeAddr)
 }
 
 func checkError(err error, msg string, f iferror.Action){
