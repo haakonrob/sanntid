@@ -12,3 +12,9 @@ func Quit(){
 
 func Ignore(){
 }
+
+func EndThread(){
+	pid := os.Getpid()
+	proc, _ := os.FindProcess(pid)
+	proc.Kill()
+}

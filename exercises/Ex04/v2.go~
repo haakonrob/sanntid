@@ -53,11 +53,18 @@ func main(){
 					IPList = append(IPList, newIP)
 					sort.Strings(IPList)
 					fmt.Println(IPList)
-					if TCPNodeOnline {
-						stopTCP<- true
+					if len(IPList) > 1 {
+						if localIP < IPList[0] {
+							isStartNode = true
+						}
+						if TCPNodeOnline {
+							stopTCP<- true
+						}
+						go TCPNode(TCPChan, stopTCP, TCPportIn, TCPportOut, getUpperNode(IPList), isStartNode)
+						if isStartNode {
+							TCPChan<- "hello"
+						}
 					}
-					go TCPNode(TCPChan, stopTCP, TCPportIn, TCPportOut, IPList)
-					
 				} else {
 					// try to reconnect with failing node? Perhaps count the number of times until a restart seems smart.
 				}
@@ -122,21 +129,9 @@ func UDPBroadcaster(TransmitEnable chan bool, msg string, localBroadcastIP strin
 	}
 }
 
+func TCPNodePair(TCPChan chan string, stopTCP chan bool, nextNodeIP string, isStartNode bool)
 
-func TCPNode(TCPChan chan string, stopTCP chan bool, portIn string, portOut string, IPList []string){
-	numberOfNodes := len(IPList)+1
-	localIP := localip.Get()
-	var nextNodeIP string
-	if localIP < IPList[0] {
-		isStartNode = true
-	}
-	if numberOfNodes == 2 {
-		nextNodeIP = IPList[0]
-	} else if numberOfNodes > 2 {
-		nextNodeIP = getUpperNode(IPList)
-	}	
-	
-
+func TCPNode(TCPChan chan string, stopTCP chan bool, portIn string, portOut string, nextNodeIP string, isStartNode bool){
 	localAddress, err := net.ResolveTCPAddr("tcp", portIn)
 	checkError(err, "Resolving local TCP address", iferror.Ignore)	
 	
@@ -169,10 +164,7 @@ func TCPNode(TCPChan chan string, stopTCP chan bool, portIn string, portOut stri
 	
 	// Start listening on lowerNodeConn
 	go listen()
-	
-	if isStartNode {
-		TCPChan<- "hello"
-	}
+
 	for {
 		select {
 			case stop := <-stopTCP:
