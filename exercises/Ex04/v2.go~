@@ -6,6 +6,7 @@ import (
 	"net"
 	"bufio"
 	"time"
+	"sort"
 	"./localip"
 	"./iferror"
 )
@@ -16,12 +17,13 @@ type elevPacket struct {
 
 func main(){
 	UDPport := ":20022"
-	//fmt.Println(localip.GetBroadcast)
+	// TCPport := ":20023"
 	localIP, err := localip.Get()
-	//localBroadcastIP, _ := localip.GetBroadcast()
+	// broadcastIP, _ := localip.GetBroadcast()
+	checkError(err, "Retrieving local IP", iferror.Ignore)
 	passcode := "svekonrules"
 	UDPmsg := passcode+"\n"+localIP+"\n"
-	checkError(err, "Retrieving local IP", iferror.Ignore)
+	IPList := make([] string, 0, 20)
 
 	UDPReceiveChan := make(chan string)
 	UDPTransmitEnable := make(chan bool)
@@ -31,10 +33,19 @@ func main(){
 	go UDPReceiver(UDPReceiveChan, passcode, UDPport)
 	go UDPBroadcaster(UDPTransmitEnable, UDPmsg, localIP, UDPport)
 	UDPTransmitEnable <- true
-	for{
-	fmt.Println("main",<-UDPReceiveChan)
-	UDPTransmitEnable <- false
-		UDPTransmitEnable <- true
+	for {	
+		newIP := <-UDPReceiveChan
+		if dontKnowIP(newIP, IPList){
+			IPList = append(IPList, newIP)
+			sort.Strings(IPList)
+		} else {
+			// try to reconnect with failing node?
+		}
+		
+		
+		fmt.Println(IPList)
+		//fmt.Println("main",<-UDPReceiveChan)
+		//UDPTransmitEnable <- false
 	}
 }
 
@@ -48,12 +59,11 @@ func UDPReceiver(UDPReceiveChan chan string, passcode string, port string){
 	
 	for {
 		code, err := reader.ReadString('\n')
-		//checkError(err, "UDP datagram received", iferror.Ignore)
+		//checkError(err, "UDP datagram received", iferror.Ignore) // very frequent
 		if code == (passcode + "\n") {
 			msg, _ := reader.ReadString('\n')
-			//fmt.Println(msg)
 			// ignore computer's own messages
-			if msg != (localIP + "\n") || true {	
+			if msg != (localIP + "\n") ||true{	
 				UDPReceiveChan <- msg[:len(msg)-1]
 			}		
 		} else {
@@ -72,7 +82,6 @@ func UDPBroadcaster(TransmitEnable chan bool, msg string, localBroadcastIP strin
 	conn, err := net.DialUDP("udp", nil, address)
 	checkError(err, "Initialising UDP broadcast", iferror.Ignore)
 	
-	bytemsg := []byte(msg)
 	broadcastOn := false
 	for {
 		// If off, wait for enable so that resources aren't taken.
@@ -84,8 +93,7 @@ func UDPBroadcaster(TransmitEnable chan bool, msg string, localBroadcastIP strin
 				case broadcastOn = <-TransmitEnable:
 					continue
 				default:
-					_, err = conn.Write(bytemsg)
-					//fmt.Println(msg)
+					_, err = conn.Write( []byte(msg) )
 					checkError(err, "Broadcasting IP", iferror.Ignore)
 					time.Sleep(time.Second)
 			}
@@ -93,11 +101,20 @@ func UDPBroadcaster(TransmitEnable chan bool, msg string, localBroadcastIP strin
 	}
 }
 
-func TCPReceiver(ReceiveChan chan elevPacket){}
+func TCPReceiver(ReceiveChan chan elevPacket, previousNode *net.Conn){
+	
+}
 
-func TCPTransmitter(ReceiveChan chan elevPacket){}
+func TCPTransmitter(ReceiveChan chan elevPacket, nextNode *net.Conn){}
 
-
+func dontKnowIP(IP string, IPlist []string){
+	for i:=0; i<len(IPlist); i++ {
+		if IPlist[i] == IP {
+			return false
+		} 
+	}
+	return true
+}
 
 func checkError(err error, msg string, f iferror.Action){
 	if err != nil {
@@ -108,3 +125,4 @@ func checkError(err error, msg string, f iferror.Action){
 		fmt.Println(msg, "... Done")
 	}
 }
+
