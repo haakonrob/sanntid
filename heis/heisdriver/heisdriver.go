@@ -1,13 +1,16 @@
 package heisdriver
 
-import {
+import (
 	"fmt"
 	_"errors"
 	"./channels"
 	"./io"
-}
+)
 
-const lampChannelMatrix = [N_FLOORS][N_BUTTONS]int(
+const N_FLOORS 4
+const N_BUTTONS 3
+
+var lampChannelMatrix = [N_FLOORS][N_BUTTONS]int(
     {LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
     {LIGHT_UP2, LIGHT_DOWN2, LIGHT_COMMAND2},
     {LIGHT_UP3, LIGHT_DOWN3, LIGHT_COMMAND3},
@@ -15,32 +18,29 @@ const lampChannelMatrix = [N_FLOORS][N_BUTTONS]int(
 )
 
 
-const buttonChannelMatrix = [N_FLOORS][N_BUTTONS]int(
+var buttonChannelMatrix = [N_FLOORS][N_BUTTONS]int(
     {BUTTON_UP1, BUTTON_DOWN1, BUTTON_COMMAND1},
     {BUTTON_UP2, BUTTON_DOWN2, BUTTON_COMMAND2},
     {BUTTON_UP3, BUTTON_DOWN3, BUTTON_COMMAND3},
     {BUTTON_UP4, BUTTON_DOWN4, BUTTON_COMMAND4},
 )
 
-const N_FLOORS 4
-const N_BUTTONS 3
-
-type tagElevMotorDirection int
-type tagElevLampType int
 
 
+type elevMotorDirection int
 const(
-	DIRN_DOWN  = -1,
+	DIRN_DOWN  elevMotorDirection = -1,
     DIRN_STOP  = 0,
     DIRN_UP  = 1
-)tagElevMotorDirection
+)
 
+
+type elevButtonType int
 const( 
-	BUTTON_CALL_UP = 0,
+	BUTTON_CALL_UP elevButtonType = 0,
     BUTTON_CALL_DOWN = 1,
     BUTTON_COMMAND = 2
-)tagElevLampType
-
+)
 
 
 func elevInit(){
@@ -62,7 +62,7 @@ func elevInit(){
 }
 
 func elevSetMotorDirection(dirn elevMotorDirection ) {
-    if dirn == 0{
+    if dirn == DIRN_STOP{
         ioWriteAnalog(MOTOR, 0);
     } else if dirn > 0 {
         ioClearBit(MOTORDIR);
