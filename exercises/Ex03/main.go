@@ -45,7 +45,7 @@ func TCPclient(targetAddr string){
 
 	n, err = conn.Read(buf)
 	fmt.Println("Received: ", string(buf[0:n]), "\n")
-
+	
 	conn.Close()
 }
 
@@ -66,7 +66,9 @@ func TCPserver(port string){
 	for {
 		n, err := sock.Read(buf)
 		CheckError(err, " ")
-		fmt.Println("Received: ", string(buf[0:n]), "\n")		
+		fmt.Println("Received: ", string(buf[0:n]), "\n")
+		sock, err = ln.Accept()		
+		fmt.Println(err)
 	}
 
 	
