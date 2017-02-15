@@ -37,7 +37,7 @@ const(
 
 type elevButtonType int
 const( 
-	BUTTON_CALL_UP = 0,
+	BUTTON_CALL_UP elevButtonType = 0,
     BUTTON_CALL_DOWN = 1,
     BUTTON_COMMAND = 2
 )
