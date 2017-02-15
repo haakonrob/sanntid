@@ -27,22 +27,20 @@ var buttonChannelMatrix = [N_FLOORS][N_BUTTONS]int(
 
 
 
-type tagElevMotorDirection int
-type tagElevLampType int
-
-
+type elevMotorDirection int
 const(
-	DIRN_DOWN  = -1,
+	DIRN_DOWN  elevMotorDirection = -1,
     DIRN_STOP  = 0,
     DIRN_UP  = 1
-)tagElevMotorDirection
+)
 
+
+type elevButtonType int
 const( 
 	BUTTON_CALL_UP = 0,
     BUTTON_CALL_DOWN = 1,
     BUTTON_COMMAND = 2
-)tagElevLampType
-
+)
 
 
 func elevInit(){
@@ -64,7 +62,7 @@ func elevInit(){
 }
 
 func elevSetMotorDirection(dirn elevMotorDirection ) {
-    if dirn == 0{
+    if dirn == DIRN_STOP{
         ioWriteAnalog(MOTOR, 0);
     } else if dirn > 0 {
         ioClearBit(MOTORDIR);
