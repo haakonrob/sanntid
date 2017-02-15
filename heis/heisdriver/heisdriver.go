@@ -1,11 +1,14 @@
 package heisdriver
 
-import {
+import (
 	"fmt"
 	_"errors"
 	"./channels"
 	"./io"
-}
+)
+
+const N_FLOORS 4
+const N_BUTTONS 3
 
 var lampChannelMatrix = [N_FLOORS][N_BUTTONS]int(
     {LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
@@ -22,8 +25,7 @@ var buttonChannelMatrix = [N_FLOORS][N_BUTTONS]int(
     {BUTTON_UP4, BUTTON_DOWN4, BUTTON_COMMAND4},
 )
 
-const N_FLOORS 4
-const N_BUTTONS 3
+
 
 type tagElevMotorDirection int
 type tagElevLampType int
