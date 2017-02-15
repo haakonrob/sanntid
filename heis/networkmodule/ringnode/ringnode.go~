@@ -1,0 +1,13 @@
+package ringnode
+
+import (
+	"net"
+	"../localnet"
+)
+
+var (
+	nextNode net.Conn
+	prevNode net.Conn
+)
+
+func Init(elevChannel, updateChannel){}

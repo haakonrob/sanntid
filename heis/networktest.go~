@@ -1,0 +1,12 @@
+package main
+
+import (
+	"fmt"
+	"./networkmodule"
+)
+
+func main(){
+	nodeChan := make(chan string)
+	monitorChan := make(chan string)
+	networkmodule.Init(nodeChan, monitorChan)
+}
