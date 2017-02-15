@@ -1,4 +1,4 @@
-package driver
+package channels
 
 //in port 4
 const PORT_4_SUBDEVICE        3
