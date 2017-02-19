@@ -1,0 +1,29 @@
+package main
+
+import (
+	"fmt"
+	"./channels"
+	"./io"
+	"heisdriver"
+)
+
+func main() {
+    elevInit();
+    elevSetMotorDirection(DIRN_UP);
+
+
+    for {
+        // Change direction when we reach top/bottom floor
+        if (elevGetFloorSensorSignal() == N_FLOORS - 1) {
+            elevSetMotorDirection(DIRN_DOWN);
+        } else if (elevGetFloorSensorSignal() == 0) {
+            elevSetMotorDirection(DIRN_UP);
+        }
+
+        // Stop elevator and exit program if the stop button is pressed
+        if (elevGetStopSignal()) {
+            elevSetMotorDirection(DIRN_STOP);
+            return 0;
+        }
+    }
+}
