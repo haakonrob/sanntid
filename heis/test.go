@@ -7,11 +7,9 @@ import (
 )
 
 func main() {
-    def.ElevInit()
-  
+	def.ElevInit()
+	def.ElevSetMotorDirection(def.DIRN_DOWN)
 	
-
-
 	
     for {
         // Change direction when we reach top/bottom floor
@@ -20,13 +18,9 @@ func main() {
         if (def.ElevGetFloorSensorSignal() == def.N_FLOORS - 1) {
             def.ElevSetMotorDirection(def.DIRN_DOWN)
         } else if (def.ElevGetFloorSensorSignal() == -1) {
-            def.ElevSetMotorDirection(def.DIRN_DOWN)
+            def.ElevSetMotorDirection(def.DIRN_UP)
         }
 
-		if(def.ElevGetButtonSignal(1,1)){
-			def.ElevSetStopLamp(true)
-		}
-		
         // Stop elevator and exit program if the stop button is pressed
         /*if (def.ElevGetStopSignal()) {
             def.ElevSetMotorDirection(def.DIRN_STOP)
