@@ -48,12 +48,12 @@ func ElevSetMotorDirection(dirn elevMotorDirection ) {
     if dirn == DIRN_STOP{
 		fmt.Println("STOP")
         IoWriteAnalog(MOTOR, 0)
-    } else if dirn == DIRN_DOWN {
-		fmt.Println("DOWN")
-        IoClearBit(MOTORDIR)
-        IoWriteAnalog(MOTOR, MOTOR_SPEED)
     } else if dirn == DIRN_UP {
 		fmt.Println("UP")
+        IoClearBit(MOTORDIR)
+        IoWriteAnalog(MOTOR, MOTOR_SPEED)
+    } else if dirn == DIRN_DOWN {
+		fmt.Println("DOWN")
         IoSetBit(MOTORDIR)
         IoWriteAnalog(MOTOR, MOTOR_SPEED)
     }else {
