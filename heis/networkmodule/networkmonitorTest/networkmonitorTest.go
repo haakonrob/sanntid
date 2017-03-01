@@ -1,4 +1,4 @@
-package networkmonitor_test
+package networkmonitorTest
 import (
 	"net"
 	"bufio"
@@ -20,7 +20,7 @@ func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
 	//broadcastIP, _ := localnet.BroadcastIP()
 	//bcastMsg := UDPPasscode+"\n"+localIP+"\n"
 	updateChannel := make(chan string)
-	//UDPChan := make(chan string)
+	UDPChan := make(chan string)
 	//UDPBroadcastDone := make(chan bool)
 	//go UDPReceiver(UDPChan, UDPPasscode, UDPPort)
 	//go UDPBroadcaster(UDPBroadcastDone, bcastMsg, broadcastIP, UDPPort)

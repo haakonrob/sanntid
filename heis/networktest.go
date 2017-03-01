@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"./networkmodule/networkmonitor"
+	"./networkmodule/networkmonitorTest"
 )
 
 func main(){
 	nodeChan := make(chan string)
 	monitorChan := make(chan string)
-	networkmonitor.NetworkMonitor(nodeChan, monitorChan)
+	networkmonitorTest.NetworkMonitor(nodeChan, monitorChan)
 
 	for {
 		select {

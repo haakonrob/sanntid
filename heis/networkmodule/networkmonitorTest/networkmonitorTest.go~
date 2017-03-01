@@ -1,4 +1,4 @@
-package networkmonitor_test
+package networkmonitorTest
 import (
 	"net"
 	"bufio"
