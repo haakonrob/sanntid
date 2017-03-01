@@ -3,6 +3,7 @@ package ringnode
 import (
 	"net"
 	"time"
+	"fmt"
 )
 
 var (
@@ -12,14 +13,16 @@ var (
 
 func RingNode(elevChannel chan string, updateChannel chan string, TCPPortIn string, TCPPortOut string){
 	incomingChan := make(chan string)
-	msg := <-updateChannel
-	updateNextNode(msg,TCPPortIn)
+	newIP := <-updateChannel
 	go resetPrevNode(incomingChan, TCPPortIn)
+	updateNextNode(newIP)
+	fmt.Println("Updated")
+	
 	for {
 		select {
 			case msg := <-updateChannel:
 				go resetPrevNode(incomingChan, TCPPortIn)
-				updateNextNode(msg,TCPPortOut)
+				updateNextNode(msg)
 			case msg := <-incomingChan:
 				elevChannel<- msg
 				time.Sleep(time.Second)
@@ -40,7 +43,7 @@ func prevNodeListen(incomingChan chan string){
 }*/
 
 func resetPrevNode(incomingChan chan string, port string){
-	prevNode.Close()
+	//prevNode.Close()
 	addr, _ := net.ResolveTCPAddr("tcp", port)
 	listener, _ := net.ListenTCP("tcp", addr)
 	prevNode, _ = listener.Accept()
@@ -50,12 +53,17 @@ func resetPrevNode(incomingChan chan string, port string){
 	return
 }
 
-func updateNextNode(nextNodeIP string, port string){
-	nextNode.Close()
-	address, _ := net.ResolveTCPAddr("tcp",nextNodeIP+port)
+func updateNextNode(nextNodeIP string){
+	//nextNode.Close()
+	address, err := net.ResolveTCPAddr("tcp",nextNodeIP)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 	conn, err := net.DialTCP("tcp", nil, address)
 	if err != nil {
-		//return
+		fmt.Println(err)
+		return
 	}
 	nextNode = conn
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sort"
 	"time"
+	"fmt"
 )
 
 var (
@@ -13,6 +14,14 @@ var (
 	IPList [] string
 	IPTimestamps map[string]time.Time
 )
+
+func Init(){
+	IP()
+	BroadcastIP()
+	IPList = make([]string,0,20)
+	IPTimestamps = make(map[string]time.Time)
+
+}
 
 func IP() (string, error) {
 	if localIP == "" {
@@ -81,7 +90,7 @@ func RemoveNode(IP string)(error){
 */
 func RemoveDeadConns(timeout time.Duration)(bool){
 	updateNeeded := false
-	for i:=0; i<len(IPList); i++ {
+	for i:=0; i<len(IPList)-1; i++ {
 		timestamp, IPexists := IPTimestamps[IPList[i]]
 		if IPexists {
 			if time.Since(timestamp) > timeout {
@@ -95,6 +104,10 @@ func RemoveDeadConns(timeout time.Duration)(bool){
 }
 
 func NextNode()(string){
+	if len(IPList) == 0 {
+		fmt.Println("No IPs")
+		return "bad"
+	} 
 	if len(IPList) == 1 {
 		return IPList[0]
 	} 

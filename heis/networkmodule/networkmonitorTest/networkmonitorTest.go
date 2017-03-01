@@ -5,6 +5,7 @@ import (
 	"time"
 	"../localnet"
 	"../ringnode"
+	"fmt"
 )
 
 const (
@@ -16,6 +17,7 @@ const (
 )
 
 func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
+	localnet.Init()
 	//localIP, _ := localnet.IP()
 	//broadcastIP, _ := localnet.BroadcastIP()
 	//bcastMsg := UDPPasscode+"\n"+localIP+"\n"
@@ -31,8 +33,12 @@ func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
 	for {
 		select {
 			case IPPing := <-UDPChan:
-				localnet.PeerUpdate(IPPing)
+				time.Sleep(time.Millisecond)
+				fmt.Println(IPPing)
+				//localnet.PeerUpdate(IPPing)
 			default:
+				time.Sleep(time.Millisecond)
+				
 				if localnet.RemoveDeadConns(UDPTimeout) == true {
 					updateChannel<- localnet.NextNode()
 					if localnet.IsStartNode(){
