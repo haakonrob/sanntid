@@ -16,7 +16,7 @@ func RingNode(elevChannel chan string, updateChannel chan string, TCPPortIn stri
 	newIP := <-updateChannel
 	go resetPrevNode(incomingChan, TCPPortIn)
 	time.Sleep(time.Second)
-	updateNextNode(newIP)
+	updateNextNode(newIP+TCPPortIn)
 	
 	
 	for {
