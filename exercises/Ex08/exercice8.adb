@@ -81,29 +81,18 @@ procedure exercise7 is
             ---------------------------------------
             -- PART 2: Do the transaction work here             
             ---------------------------------------
-            begin
-            Num := Unreliable_Slow_Add(Prev);
-            exception
-                when Count_Failed =>
-                    Manager.Signal_Abort;
-                when Error : others =>
-                    Put_Line ("Error...");
-            end;
-            Manager.Finished; 
+            select
+                Manager.Wait_Until_Abort triggering_alternative   -- eg. X.Entry_Call;
+                        -- code that is run when the triggering_alternative has triggered
+                    --   (forward ER code goes here)
             
-            if Manager.Commit = True then
-                Put_Line ("  Worker" & Integer'Image(Initial) & " comitting" & Integer'Image(Num));
-            else
-                Put_Line ("  Worker" & Integer'Image(Initial) &
-                             " reverting from" & Integer'Image(Num) &
-                             " to" & Integer'Image(Prev));
-                -------------------------------------------
-                -- PART 2: Roll back to previous value here
-                -------------------------------------------
-                Num := Prev;
-                
+            then abort
+                abortable_part
+                -- code that is run when nothing has triggered
+                --   (main functionality)
+            
+            end select;
 
-            end if;
 
             Prev := Num;
             delay 0.5;
