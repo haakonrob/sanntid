@@ -17,11 +17,12 @@ func RingNode(elevChannel chan string, updateChannel chan string, TCPPortIn stri
 	go resetPrevNode(incomingChan, TCPPortIn)
 	time.Sleep(time.Second)
 	updateNextNode(newIP)
-	fmt.Println("Updated")
+	
 	
 	for {
 		select {
 			case msg := <-updateChannel:
+				fmt.Println("Updated")
 				go resetPrevNode(incomingChan, TCPPortIn)
 				updateNextNode(msg)
 			case msg := <-incomingChan:
