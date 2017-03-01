@@ -4,22 +4,48 @@ import (
 	"bufio"
 	"time"
 	"../localnet"
+	"../ringnode"
 )
 
+const (
+	TCPPortIn = ":20024"
+	TCPPortOut = ":20024"
+	UDPPort = ":20023"
+	UDPPasscode = "svekonrules"
+	UDPTimeout = 100*time.Millisecond
+)
 
-func JoinNetwork(elevChannel, nodeChannel, port, UDPPasscode){
-	bcastMsg := UDPpasscode+"\n"+localnet.IP()+port+"\n"
+func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
+	localIP, _ := localnet.IP()
+	broadcastIP, _ := localnet.BroadcastIP()
+	bcastMsg := UDPPasscode+"\n"+localIP+UDPPort+"\n"
+	updateChannel := make(chan string)
 	UDPChan := make(chan string)
-	UDPBroadcastEnable := make(chan bool)
-	go UDPReceiver(UDPChan, UDPpasscode, UDPport)
-	go UDPBroadcaster(UDPBroadcastDone, UDPmsg, broadcastIP, UDPport)
+	UDPBroadcastDone := make(chan bool)
+	go UDPReceiver(UDPChan, UDPPasscode, UDPPort)
+	go UDPBroadcaster(UDPBroadcastDone, bcastMsg, broadcastIP, UDPPort)
+	go ringnode.RingNode(packetChannel, updateChannel, TCPPortIn, TCPPortOut)
+	for {
+		select {
+			case IPPing := <-UDPChan:
+				localnet.PeerUpdate(IPPing)
+			default:
+				if localnet.RemoveDeadConns(UDPTimeout){
+					updateChannel<- localnet.NextNode()
+					if localnet.IsStartNode(){
+						updateChannel<- "start"					
+					} else {
+						updateChannel<- "wait"
+					}				
+				}
+		}
+	}
 }
 
-func 
-
 func UDPReceiver(UDPReceiveChan chan string, passcode string, port string){	
+	localIP, _ := localnet.IP()
 	addr, _ := net.ResolveUDPAddr("udp", port)
-	socket, err := net.ListenUDP("udp", addr)
+	socket, _ := net.ListenUDP("udp", addr)
 	//checkError(err, "Setting up UDP listener", iferror.Quit)
 
 	reader := bufio.NewReader(socket)
@@ -31,29 +57,29 @@ func UDPReceiver(UDPReceiveChan chan string, passcode string, port string){
 			msg, _ := reader.ReadString('\n')
 			//fmt.Println(msg)
 			// ignore computer's own messages
-			if msg != (localnet.IP() + "\n"){	
+			if msg != (localIP + "\n"){	
 				UDPReceiveChan <- msg[:len(msg)-1]
 			}		
 		} else {
-			reader.Reset(socket)
+			reader = bufio.NewReader(socket)
 		}
 	}
 }
 
 func UDPBroadcaster(channel chan bool, msg string, localBroadcastIP string, UDPport string){
 		
-	address, err := net.ResolveUDPAddr("udp",localBroadcastIP+UDPport)
-	conn, err := net.DialUDP("udp", nil, address)
+	address, _ := net.ResolveUDPAddr("udp",localBroadcastIP+UDPport)
+	conn, _ := net.DialUDP("udp", nil, address)
 	//checkError(err, "Initialising UDP broadcast", iferror.Ignore)
 	
 	for {
 		select {
-			case done = <-channel:
+			case done := <-channel:
 				if done {
 					return
 				}
 			default:
-				_, err = conn.Write( []byte(msg) )
+				_, _ = conn.Write( []byte(msg) )
 				//checkError(err, "Broadcasting IP", iferror.Ignore)
 				time.Sleep(time.Second)
 		}

@@ -3,15 +3,15 @@ package localnet
 import (
 	"net"
 	"strings"
-	"errors"
 	"sort"
+	"time"
 )
 
 var (
 	localIP string
 	broadcastIP string
-	//currentNextNode string
-	KnownIPs [] string
+	IPList [] string
+	IPTimestamps map[string]time.Time
 )
 
 func IP() (string, error) {
@@ -29,64 +29,92 @@ func IP() (string, error) {
 func BroadcastIP() (string, error) {
 	if broadcastIP == "" {
 		if localIP == "" {
-			GetLocalIP()
+			IP()
 		}
 		temp := strings.Split(localIP, ".")
 		broadcastIP = temp[0]+"."+temp[1]+"."+temp[2]+".255"
 	}
 	return broadcastIP, nil
 }
-
+/*
 func KnownIPs()([]string, error){
-	return KnownIPs, nil
+	return IPList, nil
 }
-
+/*
 func GetNumberOfNodes()(int){
-	return len(KnownIPs) +1
+	return len(IPList) +1
 }
-
+*/
+func PeerUpdate(IPPing string){
+	for i:=0; i<len(IPList); i++ {
+		if IPList[i] == IPPing {
+			IPTimestamps[IPPing] = time.Now()
+			return
+		} 
+	}
+	// If IP is not in list:
+	IPList = append(IPList, IPPing)
+	sort.Strings(IPList)
+	IPTimestamps[IPPing] = time.Now()
+}
+/*
 func NewNode(newIP string)(error){
-	for i:=0; i<len(KnownIPs); i++ {
-		if KnownIPs[i] == newIP {
+	for i:=0; i<len(IPList); i++ {
+		if IPList[i] == newIP {
 			return errors.New("IP is already in list")
 		} 
 	}
-	KnownIPs = append(KnownIPs, newIP)
-	sort.Strings(KnownIPs)
+	IPList = append(IPList, newIP)
+	sort.Strings(IPList)
 	return nil
 }
-
-func RemoveNode( newIP string)(error){
-	for i:=0; i<len(KnownIPs); i++ {
-		if KnownIPs[i] == newIP {
-			KnownIPs = append(KnownIPs[:i], KnownIPs[i+1:]...)
+/*
+func RemoveNode(IP string)(error){
+	for i:=0; i<len(IPList); i++ {
+		if IPList[i] == IP {
+			IPList = append(IPList[:i], IPList[i+1:]...)
 			return nil
 		} 
 	}
 	return errors.New("IP to delete is not in list")
 }
+*/
+func RemoveDeadConns(timeout time.Duration)(bool){
+	updateNeeded := false
+	for i:=0; i<len(IPList); i++ {
+		timestamp, IPexists := IPTimestamps[IPList[i]]
+		if IPexists {
+			if time.Since(timestamp) > timeout {
+				delete(IPTimestamps, IPList[i])
+				IPList = append(IPList[:i], IPList[i+1:]...)
+				updateNeeded = true
+			}
+		} 
+	}
+	return updateNeeded
+}
 
 func NextNode()(string){
-	if GetNumberOfNodes() == 2 {
-		return KnownIPs[0]
+	if len(IPList) == 1 {
+		return IPList[0]
 	} 
 	// smallest member
-	if localIP < KnownIPs[0] {
-		return KnownIPs[0]
+	if localIP < IPList[0] {
+		return IPList[0]
 	}
 	// somewhere inbetween
-	for i:=0;i<len(KnownIPs)-1;i++ {
-		if localIP == KnownIPs[i] {
+	for i:=0;i<len(IPList)-1;i++ {
+		if localIP == IPList[i] {
 			return "BadIPlist" //shouldn't happen
-		} else if localIP > KnownIPs[i] && localIP < KnownIPs[i+1] {
-			return KnownIPs[i+1]
+		} else if localIP > IPList[i] && localIP < IPList[i+1] {
+			return IPList[i+1]
 		} 
 	}
 	// reached end of list, wrap around
-	return KnownIPs[0]
+	return IPList[0]
 }
 func IsStartNode()(bool){
-	if localIP < KnownIPs[0] {
+	if localIP < IPList[0] {
 		return true
 	}
 	return false
