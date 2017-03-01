@@ -15,6 +15,7 @@ func RingNode(elevChannel chan string, updateChannel chan string, TCPPortIn stri
 	incomingChan := make(chan string)
 	newIP := <-updateChannel
 	go resetPrevNode(incomingChan, TCPPortIn)
+	time.Sleep(time.Second)
 	updateNextNode(newIP)
 	fmt.Println("Updated")
 	
@@ -47,6 +48,7 @@ func resetPrevNode(incomingChan chan string, port string){
 	addr, _ := net.ResolveTCPAddr("tcp", port)
 	listener, _ := net.ListenTCP("tcp", addr)
 	prevNode, _ = listener.Accept()
+	fmt.Println("PrevConnect")
 	buf := make([]byte, 1024)
 	n, _ := prevNode.Read(buf)
 	incomingChan<- string(buf[0:n])

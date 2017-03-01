@@ -10,7 +10,7 @@ import (
 
 const (
 	TCPPortIn = ":20024"
-	TCPPortOut = ":20024"
+	TCPPortOut = ":20025"
 	UDPPort = ":20023"
 	UDPPasscode = "svekonrules"
 	UDPTimeout = 100*time.Millisecond
@@ -28,8 +28,9 @@ func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
 	//go UDPBroadcaster(UDPBroadcastDone, bcastMsg, broadcastIP, UDPPort)
 	go ringnode.RingNode(packetChannel, updateChannel, TCPPortIn, TCPPortOut)
 	//localnet.PeerUpdate("129.241.187.48")
-	localnet.PeerUpdate("10.24.39.211"+UDPPort)
+	localnet.PeerUpdate("10.24.39.211"+TCPPortIn)
 	updateChannel<- localnet.NextNode()
+	fmt.Println(localnet.IsStartNode())
 	for {
 		select {
 			case IPPing := <-UDPChan:
@@ -38,7 +39,7 @@ func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
 				//localnet.PeerUpdate(IPPing)
 			default:
 				time.Sleep(time.Millisecond)
-				
+				/*
 				if localnet.RemoveDeadConns(UDPTimeout) == true {
 					updateChannel<- localnet.NextNode()
 					if localnet.IsStartNode(){
@@ -46,7 +47,7 @@ func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
 					} else {
 						updateChannel<- "wait"
 					}				
-				}
+				}*/
 		}
 	}
 }

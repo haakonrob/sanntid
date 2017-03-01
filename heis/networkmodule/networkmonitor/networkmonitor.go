@@ -16,6 +16,7 @@ const (
 )
 
 func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
+	localnet.Init()
 	localIP, _ := localnet.IP()
 	broadcastIP, _ := localnet.BroadcastIP()
 	bcastMsg := UDPPasscode+"\n"+localIP+UDPPort+"\n"
