@@ -83,13 +83,13 @@ func ElevSetFloorIndicator(floor int) {
 		fmt.Println("ERROR floor ind.driver")	
 	}
 
-    if floor == 0x02 {
+    if floor&0x02 > 0{
         IoSetBit(LIGHT_FLOOR_IND1)
     } else {
         IoClearBit(LIGHT_FLOOR_IND1)
     }    
 
-    if floor == 0x01 {
+    if floor&0x01 > 0{
         IoSetBit(LIGHT_FLOOR_IND2)
     } else {
         IoClearBit(LIGHT_FLOOR_IND2)
