@@ -30,7 +30,7 @@ func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
 			case IPPing := <-UDPChan:
 				localnet.PeerUpdate(IPPing)
 			default:
-				if localnet.RemoveDeadConns(UDPTimeout){
+				if localnet.RemoveDeadConns(UDPTimeout) == true {
 					updateChannel<- localnet.NextNode()
 					if localnet.IsStartNode(){
 						updateChannel<- "start"					
