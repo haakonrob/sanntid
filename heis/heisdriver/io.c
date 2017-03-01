@@ -1,5 +1,4 @@
 #include <comedilib.h>
-
 #include "io.h"
 #include "channels.h"
 

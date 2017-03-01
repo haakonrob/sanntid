@@ -1,16 +1,15 @@
-package channels
+package heisdriver
 /*
 #cgo CFLAGS: -std=c11
 #cgo LDFLAGS: -lcomedi -lm
 */
-
 import "C"
 
 //in port 4
 const (
 	PORT_4_SUBDEVICE 		= 3
 	PORT_4_CHANNEL_OFFSET   = 16
-	PORT_4_DIRECTION        = int(C.COMEDI_INPUT)
+	//PORT_4_DIRECTION        = int(C.COMEDI_INPUT)
 	OBSTRUCTION             = (0x300+23)
 	STOP                    = (0x300+22)
 	BUTTON_COMMAND1         = (0x300+21)
@@ -24,7 +23,7 @@ const (
 const (
 	PORT_1_SUBDEVICE        = 2
 	PORT_1_CHANNEL_OFFSET   = 0
-	PORT_1_DIRECTION        = int(C.COMEDI_INPUT)
+	//PORT_1_DIRECTION        = int(C.COMEDI_INPUT)
 	BUTTON_DOWN2            = (0x200+0)
 	BUTTON_UP3              = (0x200+1)
 	BUTTON_DOWN3            = (0x200+2)
@@ -38,7 +37,7 @@ const (
 const (
 	PORT_3_SUBDEVICE        = 3
 	PORT_3_CHANNEL_OFFSET  	= 8
-	PORT_3_DIRECTION        = int(C.COMEDI_OUTPUT)
+	//PORT_3_DIRECTION        = int(C.COMEDI_OUTPUT)
 	MOTORDIR                = (0x300+15)
 	LIGHT_STOP              = (0x300+14)
 	LIGHT_COMMAND1          = (0x300+13)
@@ -52,7 +51,7 @@ const (
 const (
 	PORT_2_SUBDEVICE        = 3
 	PORT_2_CHANNEL_OFFSET   = 0
-	PORT_2_DIRECTION        = int(C.COMEDI_OUTPUT)
+	//PORT_2_DIRECTION        = int(C.COMEDI_OUTPUT)
 	LIGHT_DOWN2             = (0x300+7)
 	LIGHT_UP3               = (0x300+6)
 	LIGHT_DOWN3             = (0x300+5)

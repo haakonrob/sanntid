@@ -1,14 +1,15 @@
-package heisdriver
+package main
 
 import (
 	"fmt"
 	"./channels"
 	"./io"
+	"heisdriver"
 )
 
 func main() {
     elevInit();
-    elev_set_motor_direction(DIRN_UP);
+    elevSetMotorDirection(DIRN_UP);
 
 
     for {
