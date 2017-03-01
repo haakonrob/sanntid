@@ -14,6 +14,7 @@ func main(){
 		select {
 			case msg := <- nodeChan:
 				fmt.Println(msg)
+				nodeChan<- msg
 			case msg := <- monitorChan:
 				fmt.Println(msg)
 		}

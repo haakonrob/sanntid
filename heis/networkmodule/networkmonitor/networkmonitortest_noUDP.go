@@ -25,8 +25,9 @@ func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
 	//go UDPReceiver(UDPChan, UDPPasscode, UDPPort)
 	//go UDPBroadcaster(UDPBroadcastDone, bcastMsg, broadcastIP, UDPPort)
 	go ringnode.RingNode(packetChannel, updateChannel, TCPPortIn, TCPPortOut)
-	localnet.PeerUpdate("129.241.187.48")
-	localnet.PeerUpdate("10.24.39.211")
+	//localnet.PeerUpdate("129.241.187.48")
+	localnet.PeerUpdate("10.24.39.211"+UDPPort)
+	updateChannel<- localnet.NextNode()
 	for {
 		select {
 			case IPPing := <-UDPChan:
