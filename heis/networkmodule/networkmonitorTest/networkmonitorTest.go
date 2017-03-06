@@ -42,7 +42,7 @@ func NetworkMonitor(packetChannel chan string, monitorChannel chan string){
 				/*
 				if localnet.RemoveDeadConns(UDPTimeout) == true {
 					updateChannel<- localnet.NextNode()
-					if localnet.IsStartNode(){
+					if localnet.NextNode()==0{
 						updateChannel<- "start"					
 					} else {
 						updateChannel<- "wait"

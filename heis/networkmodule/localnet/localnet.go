@@ -126,10 +126,14 @@ func NextNode()(string){
 	// reached end of list, wrap around
 	return IPList[0]
 }
-func IsStartNode()(bool){
-	if localIP < IPList[0] {
-		return true
-	}
-	return false
+func NodeNumber()(int){
+	
+	for i:=0;i<len(IPList):i++{
+		if localIP < IPList[i] {
+			return i
+		}
+	} 
+	return i
+	
 }
 
