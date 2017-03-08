@@ -9,8 +9,6 @@ _"os"
 "time"
 )
 
-const 
-
 const ( 
 	MAX_NUM_ELEVS = 10
  	N_FLOORS = heis.N_FLOORS
@@ -20,13 +18,14 @@ const (
 )
 
 // INCLUDED IN FSM.go!
+/******REMOVE*********/
 type LocalOrderStruct struct {
 	Pending [3][NUM_FLOORS] bool
 	Completed [3][NUM_FLOORS] bool
 	prevFloor int
 	direction heis.ElevMotorDirection
 }
-
+/**********************/
 
 type GlobalOrderStruct struct {
 	Available [2][NUM_FLOORS] bool
@@ -37,17 +36,20 @@ type GlobalOrderStruct struct {
 	LocalOrdersBackup[MAX_NUM_ELEVS] LocalOrderStruct
 }
 
-//var LocalOrders fsm.LocalOrderStruct
-var LocalOrders LocalOrderStruct
-var GlobalOrders GlobalOrderStruct
-var online bool
-var localElevIndex int
-var activeElevs []int
-
-/******REMOVE*********/
-var prevFloor int
-var currDir heis.ElevMotorDirection
- /*****REMOVE*********/
+var (
+	/*********ADD*********
+	LocalOrders fsm.LocalOrderStruct		
+	**********************/
+	/******REMOVE*********/
+	LocalOrders LocalOrderStruct
+	prevFloor int
+	currDir heis.ElevMotorDirection
+	 /*****REMOVE*********/
+	GlobalOrders GlobalOrderStruct
+	online bool
+	localElevIndex int
+	activeElevs []int
+)
 
 /*********************************
 Testing for network encoding
@@ -60,40 +62,27 @@ Main
 
 func main(){
 	
-	
+	// Init stuff
+	/************************/
 	localElevIndex = 0;
 	activeElevs = make([]int, 0, MAX_NUM_ELEVS)
 	
-	
-	// FSM NEEDS initElev() so that it's at a floor
-
 	// Sets all Taken values to -1. Not o because 0 can be a elevIndex
 	for _, ordertype := range([]int{UP, DOWN}) {
     	for _, floor := range(GlobalOrders.Taken[ordertype]) {
     		GlobalOrders.Taken[ordertype][floor] = -1
 		}
 	}
-	
+	/************************/
+
 	orderChan := make(chan heis.Order, 5) 
 	eventChan := make(chan heis.Event, 5)
+
 	/*****ADD*****
 	fsmChan := make(chan fsm.FsmPackageStruct)
 	networkChan := make(chan string)
 	**************/
-	
-	
-	
-	//nextOrder := getNextOrder()
-	//go doOrder(nextOrder)
-	//if online {
-	//	recvOrdersFromNetwork()
-	//}
-	//scoreOrders()
-	//if online {
-	//	sendOrdersToNetwork()
-	//}
-	
-	
+		
 	go heis.Poller(orderChan, eventChan)
 	/*****ADD*****
 	go networkMonitor(network)
@@ -106,14 +95,45 @@ func main(){
 			case order := <-orderChan:
 				fmt.Println(order)
 				//addNewOrder(order)
+				/*
+				if !online {
+					updateLights()
+				}
+				*/
+			/******REMOVE*********/
+			// this is moved to fsm
 			case ev := <-eventChan:
 				fmt.Println(ev)
-			/*****ADD*****
+			/**********************/
+			/*********ADD*********
 			case msg := <-networkChan:
-				mergeOrders() 
-			go fsm.Fsm(eventChan)
-			**************/
+				MSG = decode(msg)
+				// replace with handle_msg()
+				if MSG.header == "orders"{
+					unverified_GlobalState = mergeOrders(LocalState, newGlobalState)
+					//unverified_GlobalState = scoreOrders(unverified_GlobalState)
+					msg = encode(unverified_GlobalState)
+					networkChan<- msg
+					status := <-networkchan
+					if status == "SUCCESS" {
+						GlobalState = unverified_GlobalState	
+					} else {
+						//troubleshoot network
+						online = false
+					}
+					updateLights()
+					}
+				}
+				updateLights() 
+			case newLocalState := <-fsmChan:
+				updateLocalState(newLocalState)
+			**********************/
 			default:
+				/********MAYBE********
+				// COULD ALSO BE DONE THROUGH THE CHANNEL
+				online, localElevIndex, activeElevs = network.getNetworkState()
+				**********************/
+				/********REMOVE*******/
 				getNextOrder()
 				if time.Since(timestamp) > time.Second*100 {
 					// testing getNextOrder(). Works!
@@ -122,6 +142,7 @@ func main(){
 					fmt.Println(getNextOrder())
 					timestamp = time.Now()
 				}
+				/*********************/
 				// set nextOrder?
 				continue
 		}
@@ -130,20 +151,29 @@ func main(){
 
 /*********************************
 Functions
+Needed:
+updateLocalState()
+updateGlobalState()
+
 *********************************/
 
 func addNewOrder(order heis.Order){
 	/*
-	if order.OrderType == 
-	Try to add to global orders
-
-
+	ordertype = order.OrderType
+	floor = order.Floor
+	if ordertype == UP || ordertype == DOWN {
+		GlobalOrders.Available[ordertype][floor] = true
+	} else if order.OrderType == COMMAND {
+		LocalOrders.Pending[ordertype][floor] = true
+	} else {
+		fmt.Println("Invalid OrderType in addNewOrder()")
+	}
 	*/
 	LocalOrders.Pending[order.OrderType][order.Floor] = true
 	LocalOrders.Completed[order.OrderType][order.Floor] = false
 }
 
-// getNextOrder() will be replaced by updateLocalOrders()
+// getNextOrder() will be replaced by updateLocalOrders() AND mergeOrders()()
 func getNextOrder() (int, int, bool) {
 	//IMPROVEMENTS:
 	//Collect and choose best option instead of taking first one
@@ -188,7 +218,8 @@ func isBestScore(ordertype int, floor int) bool{
 }
 
 
-
+/********REMOVE**********************************************************************/
+// LocalOrders are either updated through the fsmChan or updateLocalOrders()
 func completeOrder(order heis.Order){
 	LocalOrders.Pending[order.OrderType][order.Floor] = false
 	LocalOrders.Completed[order.OrderType][order.Floor] = true
@@ -197,9 +228,9 @@ func completeOrder(order heis.Order){
 	// GlobalOrders.Taken[i] = -1
 	// stop and open doors
 }
-
+/********REMOVE**********************************************************************/
 func sendOrdersToNetwork() bool {
-	// could be replaced with an encode/decode function
+	// Replaced with an encode/decode function pair and netChan
 	/*
 	msg, err := json.Marshal(GlobalOrders)
 	if err == nil {
@@ -212,9 +243,9 @@ func sendOrdersToNetwork() bool {
 	str = string(msg)
 	return true
 }
-
+/********REMOVE**********************************************************************/
 func recvOrdersFromNetwork(network chan []byte) bool {
-	// could be replaced with an encode/decode function
+	// Replaced with an encode/decode function pair and netChan
 	/*
 	temp := make(GlobalOrderStruct)
 	select {
@@ -232,6 +263,8 @@ func recvOrdersFromNetwork(network chan []byte) bool {
 	fmt.Println(GlobalOrders)
 	return true
 }
+/********REMOVE**********************************************************************/
+
 
 func mergeOrders(newGlobalOrders GlobalOrderStruct){
 	GlobalOrders = newGlobalOrders
