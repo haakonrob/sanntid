@@ -3,36 +3,30 @@ package main
 import(
 "fmt"
 "encoding/json"
+//"./fsm"
 heis "./heisdriver"
 _"os"
 "time"
 )
 
-const MAX_NUM_ELEVS = 10
-const NUM_FLOORS = heis.N_FLOORS
+const 
 
-type orderIndex int
 const ( 
-	UP = 0
-	DOWN = 1
-	COMMAND = 2
-	ORDER_UP1 orderIndex = iota
-    	ORDER_UP2
-   	ORDER_UP3
-    	ORDER_DOWN2
-    	ORDER_DOWN3
-    	ORDER_DOWN4
-    	//ORDER_COMM1
-    	//ORDER_COMM2
-    	//ORDER_COMM3
-    	//ORDER_COMM4
-    	ORDER_MAXINDEX
+	MAX_NUM_ELEVS = 10
+ 	N_FLOORS = heis.N_FLOORS
+	UP = heis.BUTTON_CALL_UP
+	DOWN = heis.BUTTON_CALL_DOWN
+	COMMAND = heis.BUTTON_COMMAND
 )
 
+// INCLUDED IN FSM.go!
 type LocalOrderStruct struct {
 	Pending [3][NUM_FLOORS] bool
 	Completed [3][NUM_FLOORS] bool
+	prevFloor int
+	direction heis.ElevMotorDirection
 }
+
 
 type GlobalOrderStruct struct {
 	Available [2][NUM_FLOORS] bool
@@ -43,13 +37,18 @@ type GlobalOrderStruct struct {
 	LocalOrdersBackup[MAX_NUM_ELEVS] LocalOrderStruct
 }
 
-var GlobalOrders GlobalOrderStruct
+//var LocalOrders fsm.LocalOrderStruct
 var LocalOrders LocalOrderStruct
+var GlobalOrders GlobalOrderStruct
 var online bool
 var localElevIndex int
 var activeElevs []int
+
+/******REMOVE*********/
 var prevFloor int
 var currDir heis.ElevMotorDirection
+ /*****REMOVE*********/
+
 /*********************************
 Testing for network encoding
 *********************************/
@@ -65,8 +64,8 @@ func main(){
 	localElevIndex = 0;
 	activeElevs = make([]int, 0, MAX_NUM_ELEVS)
 	
-	heis.ElevInit()
-	// NEEDS initElev() so that it's at a floor
+	
+	// FSM NEEDS initElev() so that it's at a floor
 
 	// Sets all Taken values to -1. Not o because 0 can be a elevIndex
 	for _, ordertype := range([]int{UP, DOWN}) {
@@ -77,7 +76,11 @@ func main(){
 	
 	orderChan := make(chan heis.Order, 5) 
 	eventChan := make(chan heis.Event, 5)
-	//network := make(chan string)
+	/*****ADD*****
+	fsmChan := make(chan fsm.FsmPackageStruct)
+	networkChan := make(chan string)
+	**************/
+	
 	
 	
 	//nextOrder := getNextOrder()
@@ -91,20 +94,27 @@ func main(){
 	//}
 	
 	
-	// go networkMonitor(network)
 	go heis.Poller(orderChan, eventChan)
-	
+	/*****ADD*****
+	go networkMonitor(network)
+	go fsm.Fsm(eventChan)
+	**************/
 	timestamp := time.Now()
 	for {
 		// online, localElevIndex,  = networkStatus()
 		select {
 			case order := <-orderChan:
 				fmt.Println(order)
-				//_ = order //addNewOrder(order)
+				//addNewOrder(order)
 			case ev := <-eventChan:
-				//_ = ev
 				fmt.Println(ev)
+			/*****ADD*****
+			case msg := <-networkChan:
+				mergeOrders() 
+			go fsm.Fsm(eventChan)
+			**************/
 			default:
+				getNextOrder()
 				if time.Since(timestamp) > time.Second*100 {
 					// testing getNextOrder(). Works!
 					fmt.Println(GlobalOrders.Available)
@@ -122,6 +132,18 @@ func main(){
 Functions
 *********************************/
 
+func addNewOrder(order heis.Order){
+	/*
+	if order.OrderType == 
+	Try to add to global orders
+
+
+	*/
+	LocalOrders.Pending[order.OrderType][order.Floor] = true
+	LocalOrders.Completed[order.OrderType][order.Floor] = false
+}
+
+// getNextOrder() will be replaced by updateLocalOrders()
 func getNextOrder() (int, int, bool) {
 	//IMPROVEMENTS:
 	//Collect and choose best option instead of taking first one
@@ -142,6 +164,15 @@ func getNextOrder() (int, int, bool) {
 	return -1,-1, false
 }
 
+func scoreOrders(){
+	for _, ordertype := range([]int{UP, DOWN}){
+		for floor := 0; floor<NUM_FLOORS; floor++ {
+			//INSERT COST FUNC HERE
+			GlobalOrders.Scores[localElevIndex][ordertype][floor] = 10;
+		}
+	}
+}
+
 func isBestScore(ordertype int, floor int) bool{
 	// returns false if it finds a better competitor, else returns true. 
 	// If this is somehow called when the network is down, ignore globalorders.
@@ -156,19 +187,7 @@ func isBestScore(ordertype int, floor int) bool{
 	return true
 }
 
-func scoreOrders(){
-	for _, ordertype := range([]int{UP, DOWN}){
-		for floor := 0; floor<NUM_FLOORS; floor++ {
-			//INSERT COST FUNC HERE
-			GlobalOrders.Scores[localElevIndex][ordertype][floor] = 10;
-		}
-	}
-}
 
-func addNewOrder(order heis.Order){
-	LocalOrders.Pending[order.OrderType][order.Floor] = true
-	LocalOrders.Completed[order.OrderType][order.Floor] = false
-}
 
 func completeOrder(order heis.Order){
 	LocalOrders.Pending[order.OrderType][order.Floor] = false

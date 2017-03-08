@@ -63,7 +63,7 @@ func Poller(orders chan Order , events chan Event){
 	var atFloor bool
 	var stopped bool
 	var obstructed bool
-	
+	ElevInit()
 	for {
 		currFloor := ElevGetFloorSensorSignal()
 		if currFloor != -1 && !atFloor {
