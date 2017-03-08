@@ -163,7 +163,7 @@ func addNewOrder(order heis.Order){
 func completeOrder(order heis.Order){
 	LocalOrders.Pending[order.OrderType][order.Floor] = false
 	LocalOrders.Completed[order.OrderType][order.Floor] = true
-	// Turn off light?
+	
 	// GlobalOrders.Available[i] = false
 	// GlobalOrders.Taken[i] = -1
 	// stop and open doors
@@ -176,6 +176,7 @@ func sendOrdersToNetwork() bool {
 	if err == nil {
 		network<- msg
 		// wait for ACK
+		
 	}
 	*/
 
