@@ -26,9 +26,9 @@ var buttonChannelMatrix = [N_FLOORS][N_BUTTONS] int {
 
 
 
-type elevMotorDirection int
+type ElevMotorDirection int
 const (
-	DIRN_DOWN  elevMotorDirection = -1 << iota 
+	DIRN_DOWN  ElevMotorDirection = -1 << iota 
     DIRN_STOP
     DIRN_UP 
 )
@@ -41,10 +41,90 @@ const (
     BUTTON_COMMAND
 )
 
+type Event int
+const (
+	FLOOR1 = iota
+	FLOOR2
+	FLOOR3
+	FLOOR4
+	STOP_ON
+	STOP_OFF
+	OBSTRUCTION_ON
+	OBSTRUCTION_OFF
+)
 
 
+// Floor 1 is saved as 0, floor 2 is saved as 1, etc
+type Order struct {
+	OrderType elevButtonType
+	Floor int
+}
 
-func ElevSetMotorDirection(dirn elevMotorDirection ) {
+func Poller(orders chan Order , events chan Event){
+	var orderArray [3][4] bool
+	var atFloor bool
+	var stopped bool
+	var obstructed bool
+	
+	for {
+		currFloor := ElevGetFloorSensorSignal()
+		if currFloor != -1 && !atFloor {
+			atFloor = true
+			events<- Event(FLOOR1 + currFloor)
+		} else if currFloor == -1 && atFloor {
+			atFloor = false
+		}
+		
+		stopButton := ElevGetStopSignal()
+		if stopButton && !stopped {
+			stopped = true
+			events<- STOP_ON
+		} else if !stopButton && stopped {
+			stopped = false
+			events<- STOP_OFF
+		}
+		
+		obstructionSwitch := ElevGetObstructionSignal()
+		if obstructionSwitch && !obstructed {
+			obstructed = true
+			events<- OBSTRUCTION_ON
+		} else if !obstructionSwitch && obstructed {
+			obstructed = false
+			events<- OBSTRUCTION_OFF
+		}
+		
+		for i := 0 ; i < 3 ; i++ {
+			press := ElevGetButtonSignal(BUTTON_CALL_UP, i);
+			if !orderArray[0][i] && press {
+				orderArray[0][i] = true
+				orders<- Order{ BUTTON_CALL_UP, i}
+			} else if orderArray[0][i] && !press {
+				orderArray[0][i] = false
+			}
+		}
+		for i := 1 ; i < 4 ; i++ {
+			press := ElevGetButtonSignal(BUTTON_CALL_DOWN, i);
+			if !orderArray[1][i] && press {
+				orderArray[1][i] = true
+				orders<- Order{ BUTTON_CALL_DOWN, i}
+			} else if orderArray[1][i] && !press {
+				orderArray[1][i] = false
+			}
+		}
+		for i := 0 ; i < 4 ; i++ {
+			press := ElevGetButtonSignal(BUTTON_COMMAND, i);
+			if !orderArray[2][i] && press {
+				orderArray[2][i] = true
+				orders<- Order{ BUTTON_COMMAND, i}
+			} else if orderArray[2][i] && !press {
+				orderArray[2][i] = false
+			}
+		}
+	}
+}
+
+
+func ElevSetMotorDirection(dirn ElevMotorDirection ) {
     if dirn == DIRN_STOP{
 		fmt.Println("STOP")
         IoWriteAnalog(MOTOR, 0)
@@ -112,7 +192,7 @@ func ElevSetStopLamp(value bool) {
     }
 }
 
-func ElevGetButtonSignal(button int, floor int) bool{
+func ElevGetButtonSignal(button elevButtonType, floor int) bool{
 
 	if button > N_BUTTONS || button < 0 || floor < 0 || floor > N_FLOORS {
 		fmt.Println("ERROR get lamp.driver")
