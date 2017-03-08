@@ -37,9 +37,8 @@ const (
 type elevButtonType int
 const ( 
 	BUTTON_CALL_UP elevButtonType = iota
-    	BUTTON_CALL_DOWN
-    	BUTTON_COMMAND
-	NUM_BUTTONS
+    BUTTON_CALL_DOWN
+    BUTTON_COMMAND
 )
 
 // Floor 1 is saved as 0, floor 2 is saved as 1, etc
@@ -50,17 +49,17 @@ type Order struct {
 
 type EventType int
 const (
-	FLOOR = iota
-	STOP
-	OBSTRUCTION
+	FLOOR_EVENT = iota
+	STOP_EVENT
+	OBSTRUCTION_EVENT
 )
 type Event struct {
 	Type EventType
 	val int
 }
 
-func Poller(orders chan Order , events chan Event, NUM_FLOORS int){
-	var orderArray [NUM_BUTTONS][NUM_FLOORS] bool
+func Poller(orders chan Order , events chan Event){
+	var orderArray [N_BUTTONS][N_FLOORS] bool
 	var atFloor bool
 	var stopped bool
 	var obstructed bool
@@ -69,7 +68,7 @@ func Poller(orders chan Order , events chan Event, NUM_FLOORS int){
 		currFloor := ElevGetFloorSensorSignal()
 		if currFloor != -1 && !atFloor {
 			atFloor = true
-			events<- Event{FLOOR, currFloor}
+			events<- Event{FLOOR_EVENT, currFloor}
 		} else if currFloor == -1 && atFloor {
 			atFloor = false
 		}
@@ -77,22 +76,22 @@ func Poller(orders chan Order , events chan Event, NUM_FLOORS int){
 		stopButton := ElevGetStopSignal()
 		if stopButton && !stopped {
 			stopped = true
-			events<- Event{STOP, 1}
+			events<- Event{STOP_EVENT, 1}
 		} else if !stopButton && stopped {
 			stopped = false
-			events<- Event{STOP, 0}
+			events<- Event{STOP_EVENT, 0}
 		}
 		
 		obstructionSwitch := ElevGetObstructionSignal()
 		if obstructionSwitch && !obstructed {
 			obstructed = true
-			events<- Event{OBSTRUCTION, 1}
+			events<- Event{OBSTRUCTION_EVENT, 1}
 		} else if !obstructionSwitch && obstructed {
 			obstructed = false
-			events<- Event{OBSTRUCTION, 1}
+			events<- Event{OBSTRUCTION_EVENT, 1}
 		}
 		
-		for i := 0 ; i < NUM_FLOORS-1 ; i++ {
+		for i := 0 ; i < N_FLOORS-1 ; i++ {
 			press := ElevGetButtonSignal(BUTTON_CALL_UP, i);
 			if !orderArray[0][i] && press {
 				orderArray[0][i] = true
@@ -101,7 +100,7 @@ func Poller(orders chan Order , events chan Event, NUM_FLOORS int){
 				orderArray[0][i] = false
 			}
 		}
-		for i := 1 ; i < NUM_FLOORS ; i++ {
+		for i := 1 ; i < N_FLOORS ; i++ {
 			press := ElevGetButtonSignal(BUTTON_CALL_DOWN, i);
 			if !orderArray[1][i] && press {
 				orderArray[1][i] = true
@@ -110,7 +109,7 @@ func Poller(orders chan Order , events chan Event, NUM_FLOORS int){
 				orderArray[1][i] = false
 			}
 		}
-		for i := 0 ; i < NUM_FLOORS ; i++ {
+		for i := 0 ; i < N_FLOORS ; i++ {
 			press := ElevGetButtonSignal(BUTTON_COMMAND, i);
 			if !orderArray[2][i] && press {
 				orderArray[2][i] = true

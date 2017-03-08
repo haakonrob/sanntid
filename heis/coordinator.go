@@ -9,7 +9,7 @@ _"os"
 )
 
 const MAX_NUM_ELEVS = 10
-const NUM_FLOORS = 4
+const NUM_FLOORS = heis.N_FLOORS
 
 type orderIndex int
 const ( 
@@ -66,11 +66,14 @@ func main(){
 	activeElevs = make([]int, 0, MAX_NUM_ELEVS)
 	
 	heis.ElevInit()
-	// initElev() so that it's at a floor
-	for i, _ := range(GlobalOrders.Taken) {
-    	GlobalOrders.Taken[i] = -1
+	// NEEDS initElev() so that it's at a floor
+
+	// Sets all Taken values to -1. Not o because 0 can be a elevIndex
+	for _, ordertype := range([]int{UP, DOWN}) {
+    	for _, floor := range(GlobalOrders.Taken[ordertype]) {
+    		GlobalOrders.Taken[ordertype][floor] = -1
+		}
 	}
-	
 	
 	orderChan := make(chan heis.Order, 5) 
 	eventChan := make(chan heis.Event, 5)
@@ -89,7 +92,7 @@ func main(){
 	
 	
 	// go networkMonitor(network)
-	go heis.Poller(orderChan, eventChan, NUM_FLOORS)
+	go heis.Poller(orderChan, eventChan)
 	
 	timestamp := time.Now()
 	for {
@@ -97,8 +100,9 @@ func main(){
 		select {
 			case order := <-orderChan:
 				fmt.Println(order)
-				addNewOrder(order)
+				//_ = order //addNewOrder(order)
 			case ev := <-eventChan:
+				//_ = ev
 				fmt.Println(ev)
 			default:
 				if time.Since(timestamp) > time.Second*100 {
@@ -118,31 +122,34 @@ func main(){
 Functions
 *********************************/
 
-func getNextOrder() (orderIndex, bool) {
+func getNextOrder() (int, int, bool) {
 	//IMPROVEMENTS:
 	//Collect and choose best option instead of taking first one
 
 	// If elev score is best in table AND not 0, it claims the order
-	for i:=ORDER_UP1; i<ORDER_MAXINDEX; i++ {
-		if GlobalOrders.Available[i] {
-				if isBestScore(i) {
-					GlobalOrders.Available[i] = false
-					GlobalOrders.Taken[i] = localElevIndex
-					GlobalOrders.Timestamps[i] = GlobalOrders.Clock
-					return i, true
+	for _, ordertype := range([]int{UP, DOWN}){
+		for floor := 0; floor<NUM_FLOORS; floor++ {
+			if GlobalOrders.Available[ordertype][floor] {
+					if isBestScore(ordertype, floor) {
+						GlobalOrders.Available[ordertype][floor] = false
+						GlobalOrders.Taken[ordertype][floor] = localElevIndex
+						GlobalOrders.Timestamps[ordertype][floor] = GlobalOrders.Clock
+						return ordertype, floor, true
+					}
 				}
-			}
+		}
 	}
-	return ORDER_MAXINDEX, false
+	return -1,-1, false
 }
 
-func isBestScore(i orderIndex) bool{
-	// returns false if it finds a better competitor, else returns true.
-	if len(activeElevs) == 0 {
+func isBestScore(ordertype int, floor int) bool{
+	// returns false if it finds a better competitor, else returns true. 
+	// If this is somehow called when the network is down, ignore globalorders.
+	if len(activeElevs) == 0 || !online {
 		return true
 	}
 	for _, extElevIndex := range(activeElevs) {
-		if GlobalOrders.Scores[localElevIndex][i] < GlobalOrders.Scores[extElevIndex][i]{
+		if GlobalOrders.Scores[localElevIndex][ordertype][floor] < GlobalOrders.Scores[extElevIndex][ordertype][floor]{
 			return false
 		}
 	}
@@ -150,8 +157,11 @@ func isBestScore(i orderIndex) bool{
 }
 
 func scoreOrders(){
-	for i:=ORDER_UP1; i<ORDER_MAXINDEX; i++ {
-		GlobalOrders.Scores[localElevIndex][i] = 10
+	for _, ordertype := range([]int{UP, DOWN}){
+		for floor := 0; floor<NUM_FLOORS; floor++ {
+			//INSERT COST FUNC HERE
+			GlobalOrders.Scores[localElevIndex][ordertype][floor] = 10;
+		}
 	}
 }
 
@@ -205,15 +215,16 @@ func recvOrdersFromNetwork(network chan []byte) bool {
 }
 
 func mergeOrders(newGlobalOrders GlobalOrderStruct){
-	// This situation suggests that the elevator has completed its order and needs to update the others
-	for i:=ORDER_UP1; i<ORDER_MAXINDEX; i++ {
-		if !(newGlobalOrders.Taken[i] == localElevIndex && GlobalOrders.Taken[i] == -1) {
-			GlobalOrders.Taken[i] = newGlobalOrders.Taken[i]
+	GlobalOrders = newGlobalOrders
+	//^uint(0) gives the maximum value for uint
+	GlobalOrders.Clock = (GlobalOrders.Clock+1)%(^uint(0))
+	// If an order is listed as taken, but this elev has completed it, the order is removed from globalorders
+	for _, ordertype := range([]int{UP, DOWN}){
+		for floor := 0; floor<NUM_FLOORS; floor++ {
+			if newGlobalOrders.Taken[ordertype][floor] >= 0 && LocalOrders.Completed[ordertype][floor] {
+				GlobalOrders.Taken[ordertype][floor] = -1
+				LocalOrders.Completed[ordertype][floor] = false
+			}
 		}
 	}
-	GlobalOrders.Available = newGlobalOrders.Available		
-	GlobalOrders.Timestamps = newGlobalOrders.Timestamps
-	//^uint(0) gives the maximum value for uint
-	GlobalOrders.Clock = (newGlobalOrders.Clock+1)%(^uint(0))
-	GlobalOrders.Scores = newGlobalOrders.Scores
 }
