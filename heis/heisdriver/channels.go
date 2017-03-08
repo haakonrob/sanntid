@@ -5,6 +5,29 @@ package heisdriver
 */
 import "C"
 
+
+const N_FLOORS = 4
+const N_BUTTONS = 3
+const MOTOR_SPEED = 2800
+
+
+
+
+type elevMotorDirection int
+const (
+	DIRN_DOWN  elevMotorDirection = -1 << iota 
+    DIRN_STOP
+    DIRN_UP 
+)
+
+
+type elevButtonType int
+const ( 
+	BUTTON_CALL_UP elevButtonType = iota
+    BUTTON_CALL_DOWN
+    BUTTON_COMMAND
+)
+
 //in port 4
 const (
 	PORT_4_SUBDEVICE 		= 3
