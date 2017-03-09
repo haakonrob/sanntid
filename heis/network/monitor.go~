@@ -50,7 +50,7 @@ func main() {
 	go peers.Receiver(15647, peerUpdateCh)
 
 	/* ring network */
-	ringUpdateCh := make(chan string)
+	ringUpdateCh := make(chan [2]string)
 	// go ring.Node(incomingCh, outgoingCh, ringUpdateCh,
 	/*helloTx := make(chan string)
 	helloRx := make(chan string)
