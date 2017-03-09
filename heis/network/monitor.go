@@ -1,13 +1,12 @@
 package main
 
 import (
-	"./network/bcast"
-	"./network/localip"
-	"./network/peers"
-	//"./network/ring"
+	"./localip"
+	"./peers"
+	//"./ring"
 	"fmt"
 	"os"
-	"time"
+	//"time"
 	"strings"
 )
 
@@ -51,20 +50,8 @@ func main() {
 
 	/* ring network */
 	ringUpdateCh := make(chan string)
-	// go ring.Node(incomingCh, outgoingCh, ringUpdateCh,
-	/*helloTx := make(chan string)
-	helloRx := make(chan string)
-	go bcast.Transmitter(16569, helloTx)
-	go bcast.Receiver(16569, helloRx)
-	// The example message. We just send one of these every second.
-	go func() {
-		helloMsg := "Hello from..." + local.ID
-		for {
-			helloTx <- helloMsg
-			time.Sleep(1 * time.Second)
-		}
-	}()
-	*/
+	// every node will send a reply when it has been successfully updated. OK or ERROR.
+
 	
 	fmt.Println("Started")
 	var activePeers = make([]Peer, 0, MAX_NUM_PEERS)
@@ -83,7 +70,7 @@ func main() {
 			fmt.Printf("  New:      %q\n", p.New)
 			fmt.Printf("  Lost:     %q\n", p.Lost)
 			
-		case a := <-helloRx:
+		case a := <-ringUpdateCh:
 			fmt.Printf("Received: %#v\n", a)
 		}
 	}

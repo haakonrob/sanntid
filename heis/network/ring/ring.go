@@ -2,16 +2,15 @@ package ring
 
 import (
 	"net"
-	"os"
 	"fmt"
-	_"json"
+	//"errors"
 )
 
 func NextNode(outgoingCh chan string, updateCh chan string, port int){
 	initialised := false
 	nextAddr := ""
 	var conn net.Conn
-	
+	var err error
 	for {
 		select {
 		case nextAddr = <-updateCh:
@@ -21,10 +20,10 @@ func NextNode(outgoingCh chan string, updateCh chan string, port int){
 			IP, _ := net.ResolveTCPAddr("tcp",nextAddr)
 			conn, err = net.DialTCP("tcp", nil, IP)
 			if err == nil {
-				connUpdateCh<- "OK"
+				updateCh<- "OK"
 				initialised = true
 			} else {
-				connUpdateCh<- "ERROR"
+				updateCh<- "ERROR"
 				initialised = false	
 			}
 		case msg := <-outgoingCh:
@@ -42,18 +41,17 @@ func NextNode(outgoingCh chan string, updateCh chan string, port int){
 
 func PrevNode(incomingCh chan string, updateCh chan string, port int){
 	initialised := false
-	//var prevAddr = ""
+	TCPAddr, _ := net.ResolveTCPAddr("tcp",fmt.Sprintf(":%d",port))
+	var err error
 	var conn net.Conn
 	var buf [1024]byte
 	
 	for {
 		if !initialised {
-			go func(){
-				ln, _ := net.ListenTCP("tcp", addr)
-				conn, err := ln.Accept()
-				if err != nil {
-					initialised = true
-				}
+			ln, _ := net.ListenTCP("tcp", TCPAddr)
+			conn, err = ln.Accept()
+			if err != nil {
+				initialised = true
 			}
 		}
 		select {
@@ -62,11 +60,14 @@ func PrevNode(incomingCh chan string, updateCh chan string, port int){
 				initialised = false
 			}
 		default:
-			n, _, _ := conn.ReadFrom(buf[0:])
+			n, err := conn.Read(buf[0:])
+			if err != nil {
+					initialised = false
+					conn.Close()
+			}
 			msg := string(buf[:n])
-			
+			incomingCh<-msg
 		}
 	}
 }
 
-}
