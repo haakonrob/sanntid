@@ -1,4 +1,4 @@
-package simelev
+package client
 
 /*
 #cgo CFLAGS: -std=c11
