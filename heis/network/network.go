@@ -59,7 +59,7 @@ func Monitor(incomingCh chan string, outgoingCh chan string) {
 	go ring.NextNode(outgoingCh, ringNextCh)
 	go ring.PrevNode(incomingCh, ringPrevCh, ringPort)
 
-	fmt.Println("Network module started up PID", os.Getpid())
+	fmt.Println("Network module started up PID", local.ID)
 	// every node will send a reply when it has been successfully updated. OK or ERROR.
 	
 	var localIndex int
@@ -92,7 +92,7 @@ func Monitor(incomingCh chan string, outgoingCh chan string) {
 				next_i := (localIndex + 1) % len(activePeers)
 				ringPrevCh<- "RESET"
 				/****TEMPORARY*****/
-				ringNextCh<- fmt.Sprintf("%s:%s", activePeers[next_i].IP, ringPort)
+				ringNextCh<- fmt.Sprintf("%s:%d", activePeers[next_i].IP, ringPort)
 				//ringNextCh<- fmt.Sprintf("%s:%i", activePeers[next_i].IP, port)
 				/******************/
 				fmt.Println("NextNode",<-ringNextCh)
