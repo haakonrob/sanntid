@@ -26,7 +26,7 @@ const peerPort = 20024
 const TCPPort = 20000
 const UDPPasscode = "svekonrules"
 
-func Monitor(incomingCh chan string, outgoingCh chan string) {
+func Monitor(coordinatorCh chan string, incomingCh chan string, outgoingCh chan string) {
 
 	/* 
 	The id is either 4th number of the local IPv4, or the PID of the 
@@ -80,22 +80,24 @@ func Monitor(incomingCh chan string, outgoingCh chan string) {
 			
 		case nn := <-ringNextCh:
 			if nn == "ERROR"{
-				fmt.Println("NextNode conn closed")
+				//fmt.Println("NextNode conn closed")
 				update = true
 			}
 
 		default:
 			if update && len(activePeers) > 1 {
-				fmt.Println(activePeers)
+				//fmt.Println(activePeers)
 				localIndex = getLocalPeerIndex(local, activePeers)
-				fmt.Println("\nUpdate! Index: ", localIndex, "\n")
 				next_i := (localIndex + 1) % len(activePeers)
 				ringPrevCh<- "RESET"
 				/****TEMPORARY*****/
 				ringNextCh<- fmt.Sprintf("%s:%d", activePeers[next_i].IP, ringPort)
 				//ringNextCh<- fmt.Sprintf("%s:%i", activePeers[next_i].IP, port)
 				/******************/
-				fmt.Println("NextNode",<-ringNextCh)
+				if "OK" != <-outgoingCh {
+					fmt.Println("NextNode closed")
+				}
+				coordinatorCh<- fmt.Sprintf("%d", localIndex)
 				update = false
 				//get next node addr, send to nextnode, reset prevNode
 			}

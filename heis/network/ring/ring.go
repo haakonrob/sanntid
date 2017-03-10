@@ -30,9 +30,9 @@ func NextNode(outgoingCh chan string, updateCh chan string){
 			if err == nil {
 				updateCh<- "OK"
 				initialised = true
-				//fmt.Println("ring.NextNode()", IP)
+				fmt.Println("Next node connected")
 			} else {
-				fmt.Println("ring.NextNode() ERROR, tried ", nextAddr)
+				//fmt.Println("ring.NextNode() ERROR, tried ", nextAddr)
 				updateCh<- "ERROR"
 				initialised = false	
 			}
@@ -96,7 +96,7 @@ func PrevNode(incomingCh chan string, updateCh chan string, port int){
 						incomingCh<-msg	
 					}
 				} else {
-					fmt.Println("Failed to read prevNode")
+					//fmt.Println("Failed to read prevNode")
 					initialised = false
 					conn.Close()
 					
@@ -117,7 +117,7 @@ func listenForTCP( TCPAddr * net.TCPAddr, initialised * bool, listening * bool, 
 	*conn, err = ln.Accept()
 	if err == nil {
 		*initialised = true
-		fmt.Println("prevNode OK")
+		fmt.Println("Prev node connected")
 	}
 	*listening = false
 
