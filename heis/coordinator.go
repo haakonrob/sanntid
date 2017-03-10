@@ -4,10 +4,12 @@ import(
 	"fmt"
 	"encoding/json"
 	"./fsm"
-	heis "./heisdriver"
+	heis "./simulator/client"
 	_"os"
 	"time"
 )
+
+elevtype heis.ElevType = heis.ET_Simulation
 
 const ( 
 	MAX_NUM_ELEVS = 10
@@ -38,6 +40,9 @@ var (
 	online bool
 	localElevIndex int
 	activeElevs []int
+
+	orderTimestamp []int
+
 )
 
 /*********************************
@@ -73,7 +78,7 @@ func main(){
 	/*****ADD*****
 	networkChan := make(chan string)
 	**************/
-	heis.ElevInit()	
+	heis.ElevInit(elevtype)	
 	go heis.Poller(orderChan, eventChan)
 	go fsm.Fsm(eventChan, fsmChan)
 	/*****ADD*****
@@ -93,7 +98,9 @@ func main(){
 			case completedOrders := <-fsmChan:
 				updateLocalState(completedOrders)
 				updateGlobalState()
-			/*********ADD*********
+
+
+			//*********ADD*********
 			case msg := <-networkChan:
 				MSG = decode(msg)
 				// replace with handle_msg()
@@ -113,7 +120,7 @@ func main(){
 					}
 				}
 				updateLights() 
-			**********************/
+			//**********************/
 			
 			
 			default:
@@ -124,6 +131,7 @@ func main(){
 				/********REMOVE*******/
 				//getNextOrder()
 				if time.Since(timestamp) > time.Second*100 {
+					//online = false
 					// testing getNextOrder(). Works!
 					fmt.Println(GlobalOrders.Available)
 					fmt.Println(GlobalOrders.Taken)

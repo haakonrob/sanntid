@@ -6,6 +6,9 @@ import (
 	driver "../simulator/client"
 )
 
+elevtype driver.ElevType = driver.ET_Simulation
+
+
 const (
 	NUM_FLOORS = driver.N_FLOORS
 	UP = driver.BUTTON_CALL_UP
