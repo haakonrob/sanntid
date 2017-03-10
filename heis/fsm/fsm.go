@@ -3,10 +3,10 @@ package fsm
 import (
 	"fmt"
 	"time"
-	driver "../simulator/client"
+	driver "../heisdriver"//"../simulator/client"
 )
 
-elevtype driver.ElevType = driver.ET_Simulation
+//elevtype driver.ElevType = driver.ET_Simulation
 
 
 const (
@@ -199,4 +199,4 @@ func elev_move_down() {
 	orders.Direction = driver.DIRN_DOWN
 	
 }
->>>>>>> 78f8e02a8fbc3791b0e64b10b75e0a0c20bff8e0
+//>>>>>>> 78f8e02a8fbc3791b0e64b10b75e0a0c20bff8e0

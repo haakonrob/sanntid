@@ -1,4 +1,4 @@
-package heisdriver
+package client
 /*
 #cgo CFLAGS: -std=c11
 #cgo LDFLAGS: -lcomedi -lm

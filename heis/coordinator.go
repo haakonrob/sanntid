@@ -4,12 +4,12 @@ import(
 	"fmt"
 	"encoding/json"
 	"./fsm"
-	heis "./simulator/client"
+	heis "./heisdriver"//"./simulator/client"
 	_"os"
 	"time"
 )
 
-elevtype heis.ElevType = heis.ET_Simulation
+//elevtype heis.ElevType = heis.ET_Simulation
 
 const ( 
 	MAX_NUM_ELEVS = 10
@@ -32,16 +32,12 @@ var (
 	GlobalOrders GlobalOrderStruct
 	unverified_GlobalOrders GlobalOrderStruct
 	LocalOrders fsm.LocalOrderState		
-	/******REMOVE*********/
-	prevFloor int
-	currDir heis.ElevMotorDirection
-	 /*****REMOVE*********/
 	
 	online bool
 	localElevIndex int
 	activeElevs []int
 
-	orderTimestamp []int
+	orderTimestamp int
 
 )
 
@@ -78,7 +74,7 @@ func main(){
 	/*****ADD*****
 	networkChan := make(chan string)
 	**************/
-	heis.ElevInit(elevtype)	
+	heis.ElevInit()	
 	go heis.Poller(orderChan, eventChan)
 	go fsm.Fsm(eventChan, fsmChan)
 	/*****ADD*****
@@ -100,7 +96,7 @@ func main(){
 				updateGlobalState()
 
 
-			//*********ADD*********
+			/*********ADD*********
 			case msg := <-networkChan:
 				MSG = decode(msg)
 				// replace with handle_msg()
@@ -117,10 +113,10 @@ func main(){
 						online = false
 					}
 					updateLights()
-					}
+					
 				}
 				updateLights() 
-			//**********************/
+			/**********************/
 			
 			
 			default:
@@ -218,7 +214,10 @@ func scoreOrders(){
 	for ordertype := UP; ordertype <=DOWN; ordertype++ {
 		for floor := 0; floor<N_FLOORS; floor++ {
 			//INSERT COST FUNC HERE
-			GlobalOrders.Scores[localElevIndex][ordertype][floor] = 10;
+			//simple:
+			//GlobalOrders.Available[ordertype][floor]
+
+			GlobalOrders.Scores[localElevIndex][ordertype][floor] = 10;//LocalOrders.Pending[ordertype][floor]*10;
 		}
 	}
 }
