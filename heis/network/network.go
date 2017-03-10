@@ -20,8 +20,9 @@ type Peer struct {
 }
 
 const MAX_NUM_PEERS = 10
-const subnet = "localhost"
-//const subnet = "sanntidsal"
+//const subnet = "localhost"
+const subnet = "sanntidsal"
+const UDPPasscode = "svekonrules"
 
 func Monitor(incomingCh chan string, outgoingCh chan string) {
 
@@ -39,7 +40,8 @@ func Monitor(incomingCh chan string, outgoingCh chan string) {
 	switch subnet {
 	case "sanntidsal":
 		local.IP = IP
-		local.ID = strings.Split(IP,".")[3]
+		local.ID = fmt.Sprintf("%d",os.Getpid())
+		//local.ID = strings.Split(IP,".")[3]
 	default:
 		local.IP = IP
 		local.ID = fmt.Sprintf("%d",os.Getpid())
@@ -48,19 +50,20 @@ func Monitor(incomingCh chan string, outgoingCh chan string) {
 	/* Start monitoring network over UDP */
 	peerUpdateCh := make(chan peers.PeerUpdate)
 	peerTxEnable := make(chan bool)
-	bcastMsg := local.ID+"-"+local.IP
-	go peers.Transmitter(15647, bcastMsg, subnet, peerTxEnable)
-	go peers.Receiver(15647, peerUpdateCh)
+	bcastMsg := UDPPasscode + "_" + local.ID+"-"+local.IP
+	go peers.Transmitter(20024, bcastMsg, subnet, peerTxEnable)
+	go peers.Receiver(20024, UDPPasscode, peerUpdateCh)
+	fmt.Println("Started network monitor")
 
 	/* Ring network */
 	ringNextCh := make(chan string)
 	ringPrevCh := make(chan string)
-	go ring.NextNode(outgoingCh, ringNextCh, 20024)
-	go ring.PrevNode(incomingCh, ringPrevCh, 20024)
+	go ring.NextNode(outgoingCh, ringNextCh)
+	go ring.PrevNode(incomingCh, ringPrevCh, local.ID)
+	fmt.Println("Started TCP ring")
 	// every node will send a reply when it has been successfully updated. OK or ERROR.
 	
-	fmt.Println("Started network monitor")
-	var localIndex int
+	//var localIndex int
 	var activePeers = make([]Peer, 0, MAX_NUM_PEERS)
 	update := false
 	//update_lost_peers := false
@@ -75,32 +78,19 @@ func Monitor(incomingCh chan string, outgoingCh chan string) {
 			}
 			fmt.Println("Active Peers: ", activePeers)
 			update = true
-			/*if p.New != "" {
-				update_new_peers = true
-			}
-			if len(p.Lost) > 0 {
-				update_lost_peers = true
-			}*/
-			/*
-			fmt.Printf("  Peers:    %q\n", p.Peers)
-			fmt.Printf("  New:      %q\n", p.New)
-			fmt.Printf("  Lost:     %q\n", p.Lost)
-			*/
-		case a := <-ringPrevCh:
-			fmt.Printf("Received: %#v\n", a)
-			ringNextCh<- a
-			if (<-ringNextCh) == "OK"{
-				fmt.Println("Sent succesfully")
-			} else {
-			 fmt.Println("Failed to send to next node")
-			}
 		}
 		
 		if update && len(activePeers) > 1 {
-			localIndex = getLocalPeerIndex(local, activePeers)
+			localIndex := getLocalPeerIndex(local, activePeers)
 			next_i := (localIndex + 1) % len(activePeers)
 			ringPrevCh<- "RESET"
-			ringNextCh<- activePeers[next_i].IP
+			/****TEMPORARY*****/
+			//str := fmt.Sprintf("%s:%s", activePeers[next_i].IP, activePeers[next_i].ID)
+			//fmt.Println("Updated TCP addr", str)
+			ringNextCh<- fmt.Sprintf("%s:%s", activePeers[next_i].IP, activePeers[next_i].ID)
+			//ringNextCh<- fmt.Sprintf("%s:%i", activePeers[next_i].IP, port)
+			/******************/
+			//fmt.Println(<-ringNextCh)
 			//get next node addr, send to nextnode, reset prevNode
 			
 		}

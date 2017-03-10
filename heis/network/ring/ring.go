@@ -3,11 +3,12 @@ package ring
 import (
 	"net"
 	"fmt"
-	"time"
+	_"time"
+	_"strings"
 	//"errors"
 )
 
-func NextNode(outgoingCh chan string, updateCh chan string, port int){
+func NextNode(outgoingCh chan string, updateCh chan string){
 	initialised := false
 	nextAddr := ""
 	var conn net.Conn
@@ -18,13 +19,22 @@ func NextNode(outgoingCh chan string, updateCh chan string, port int){
 			if initialised {
 				conn.Close()
 			}
-			IP, _ := net.ResolveTCPAddr("tcp",nextAddr)
+			/****TEMPORARY*****/
+			//port = strings.Split(nextAddr, "-")[1]
+			//nextAddr = strings.Split(nextAddr, "-")[0]
+			/******************/
+			IP, err := net.ResolveTCPAddr("tcp",nextAddr)
+			if err != nil {
+				fmt.Println("NextNode()",nextAddr)
+			}
 			conn, err = net.DialTCP("tcp", nil, IP)
 			if err == nil {
-				updateCh<- "OK"
+				//updateCh<- "OK"
 				initialised = true
+				fmt.Println("ring.NextNode() OK")
 			} else {
-				updateCh<- "ERROR"
+				fmt.Println("ring.NextNode() ERROR")
+				//updateCh<- "ERROR"
 				initialised = false	
 			}
 		case msg := <-outgoingCh:
@@ -40,31 +50,26 @@ func NextNode(outgoingCh chan string, updateCh chan string, port int){
 
 }
 
-func PrevNode(incomingCh chan string, updateCh chan string, port int){
-	initialised := false
-	TCPAddr, _ := net.ResolveTCPAddr("tcp",fmt.Sprintf(":%d",port))
+func PrevNode(incomingCh chan string, updateCh chan string, port string){
 	var err error
 	var conn net.Conn
 	var buf [1024]byte
+
+	initialised := false
+	listening := false
+	TCPAddr, err := net.ResolveTCPAddr("tcp", ":" + port)
+	if err != nil {
+		fmt.Println("PrevNode() Bad port")
+	}
 	
 	for {
-		if !initialised {
-			ln, _ := net.ListenTCP("tcp", TCPAddr)
-			fmt.Println("Set up listener")
-			conn, err = ln.Accept()
-			//fmt.Println("New PrevNode")
-			if err == nil {
-				initialised = true
-				fmt.Println("initialised: ")
-			} else {
-				fmt.Println(err)
-				time.Sleep(time.Second)
-			}
+		if !initialised && !listening {
+			go listenForTCP(TCPAddr, &initialised, &listening, &conn)
 		}
 		select {
 		case update := <-updateCh:
 			if update == "RESET" {
-				
+				fmt.Println("RESET")
 				initialised = false
 			}
 		default:
@@ -75,10 +80,27 @@ func PrevNode(incomingCh chan string, updateCh chan string, port int){
 				if err != nil {
 						initialised = false
 						conn.Close()
+				}else {
+					msg := string(buf[:n])
+					incomingCh<-msg
 				}
-				msg := string(buf[:n])
-				incomingCh<-msg
 			}
 		}
 	}
+}
+
+func listenForTCP( TCPAddr * net.TCPAddr, initialised * bool, listening * bool, conn *net.Conn)(){
+	ln, err := net.ListenTCP("tcp", TCPAddr)
+	if err != nil {
+		*listening = false
+		return
+	}
+
+	*conn, err = ln.Accept()
+	if err == nil {
+		*initialised = true
+		fmt.Println("listenForTCP()",err)
+	}
+	*listening = false
+
 }
