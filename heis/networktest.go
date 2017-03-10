@@ -12,26 +12,26 @@ func main(){
 	incomingCh := make(chan string)
 	outgoingCh := make(chan string)
 	networkCh := make(chan string)
-
+	timestamp := time.Now()
 	go network.Monitor(networkCh, incomingCh, outgoingCh)
 	for {
 		select {
 		case msg := <-networkCh:
 			fmt.Println("Update! Index: ", msg)
-			if msg == "0"{
-				outgoingCh<- "hello"
-			}
+
 		case msg := <- incomingCh:
-			fmt.Println("Received: ", msg)
-			time.Sleep(time.Second)
-			outgoingCh<- msg
-			if "OK" != <-outgoingCh {
-				fmt.Println("message failed")
-			}
-			
-				
+			fmt.Println("Received: ", msg)			
 		case msg := <- outgoingCh:
 			fmt.Println(msg)
+		
+		default:
+			if(time.Since(timestamp)> time.Second){
+				timestamp = time.Now()
+				outgoingCh<- "hello"
+				if "OK" != <-outgoingCh {
+					fmt.Println("message failed")
+				}
+			}
 		}
 	}
 }
