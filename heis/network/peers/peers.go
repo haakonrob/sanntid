@@ -15,8 +15,8 @@ type PeerUpdate struct {
 	Lost  []string
 }
 
-const interval = 50 * time.Millisecond
-const timeout = 200 * time.Millisecond
+const interval = 100 * time.Millisecond
+const timeout = 500 * time.Millisecond
 
 func Transmitter(port int, id string, subnet string, transmitEnable <-chan bool) {
 
@@ -65,7 +65,6 @@ func Receiver(port int, passcode string, peerUpdateCh chan<- PeerUpdate) {
 				p.New = id
 				updated = true
 			}
-
 			lastSeen[id] = time.Now()
 		}
 

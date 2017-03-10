@@ -6,7 +6,7 @@ import (
 	"./ring"
 	"fmt"
 	"os"
-	//"time"
+	"time"
 	"strings"
 )
 
@@ -20,80 +20,88 @@ type Peer struct {
 }
 
 const MAX_NUM_PEERS = 10
-//const subnet = "localhost"
-const subnet = "sanntidsal"
+const subnet = "sanntidsal" //or localhost
+const loopBack = false
+const peerPort = 20024
+const TCPPort = 20000
 const UDPPasscode = "svekonrules"
 
 func Monitor(incomingCh chan string, outgoingCh chan string) {
 
 	/* 
 	The id is either 4th number of the local IPv4, or the PID of the 
-	process, depending on the specified subnet.
+	process, depending on the specified subnet and loopback mode.
 	*/
 	var local Peer
+	
+	ringPort := TCPPort
+	if loopBack {
+		local.ID = fmt.Sprintf("%d",os.Getpid())
+		ringPort = os.Getpid()
+	} 
 	IP, err := localip.LocalIP()
 	if err != nil {
 		fmt.Println(err)
 		IP = "DISCONNECTED"
 	}
-
-	switch subnet {
-	case "sanntidsal":
-		local.IP = IP
-		local.ID = fmt.Sprintf("%d",os.Getpid())
-		//local.ID = strings.Split(IP,".")[3]
-	default:
-		local.IP = IP
-		local.ID = fmt.Sprintf("%d",os.Getpid())
-	}
-
+	local.IP = IP
+	
 	/* Start monitoring network over UDP */
 	peerUpdateCh := make(chan peers.PeerUpdate)
 	peerTxEnable := make(chan bool)
 	bcastMsg := UDPPasscode + "_" + local.ID+"-"+local.IP
-	go peers.Transmitter(20024, bcastMsg, subnet, peerTxEnable)
-	go peers.Receiver(20024, UDPPasscode, peerUpdateCh)
-	fmt.Println("Started network monitor")
+	go peers.Transmitter(peerPort, bcastMsg, subnet, peerTxEnable)
+	go peers.Receiver(peerPort, UDPPasscode, peerUpdateCh)
 
 	/* Ring network */
 	ringNextCh := make(chan string)
 	ringPrevCh := make(chan string)
 	go ring.NextNode(outgoingCh, ringNextCh)
-	go ring.PrevNode(incomingCh, ringPrevCh, local.ID)
-	fmt.Println("Started TCP ring")
+	go ring.PrevNode(incomingCh, ringPrevCh, ringPort)
+
+	fmt.Println("Network module started up PID", os.Getpid())
 	// every node will send a reply when it has been successfully updated. OK or ERROR.
 	
-	//var localIndex int
+	var localIndex int
 	var activePeers = make([]Peer, 0, MAX_NUM_PEERS)
 	update := false
-	//update_lost_peers := false
+
 	for {
 		select {
+
 		case p := <-peerUpdateCh:
-			fmt.Printf("Peer update!\n")
 			activePeers = make([]Peer, len(p.Peers), MAX_NUM_PEERS)
 			for i, pr := range p.Peers {
 				newData := strings.Split(pr,"-")
 				activePeers[i] = Peer{newData[0], newData[1]}
 			}
-			fmt.Println("Active Peers: ", activePeers)
 			update = true
+			time.Sleep(time.Millisecond*200)
+			
+		case nn := <-ringNextCh:
+			if nn == "ERROR"{
+				fmt.Println("NextNode conn closed")
+				update = true
+			}
+
+		default:
+			if update && len(activePeers) > 1 {
+				fmt.Println(activePeers)
+				localIndex = getLocalPeerIndex(local, activePeers)
+				fmt.Println("\nUpdate! Index: ", localIndex, "\n")
+				next_i := (localIndex + 1) % len(activePeers)
+				ringPrevCh<- "RESET"
+				/****TEMPORARY*****/
+				ringNextCh<- fmt.Sprintf("%s:%s", activePeers[next_i].IP, ringPort)
+				//ringNextCh<- fmt.Sprintf("%s:%i", activePeers[next_i].IP, port)
+				/******************/
+				fmt.Println("NextNode",<-ringNextCh)
+				update = false
+				//get next node addr, send to nextnode, reset prevNode
+			}
 		}
 		
-		if update && len(activePeers) > 1 {
-			localIndex := getLocalPeerIndex(local, activePeers)
-			next_i := (localIndex + 1) % len(activePeers)
-			ringPrevCh<- "RESET"
-			/****TEMPORARY*****/
-			//str := fmt.Sprintf("%s:%s", activePeers[next_i].IP, activePeers[next_i].ID)
-			//fmt.Println("Updated TCP addr", str)
-			ringNextCh<- fmt.Sprintf("%s:%s", activePeers[next_i].IP, activePeers[next_i].ID)
-			//ringNextCh<- fmt.Sprintf("%s:%i", activePeers[next_i].IP, port)
-			/******************/
-			//fmt.Println(<-ringNextCh)
-			//get next node addr, send to nextnode, reset prevNode
-			
-		}
+		
 	}
 }
 

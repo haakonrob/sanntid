@@ -15,10 +15,11 @@ func main(){
 	for {
 		select {
 			case msg := <- incomingCh:
-				fmt.Println(msg)
-				outgoingCh<- msg
-				fmt.Println(<-outgoingCh)
+				fmt.Println("Received: ", msg)
 				time.Sleep(time.Second)
+				//outgoingCh<- msg
+				//fmt.Println(<-outgoingCh)
+				
 			case msg := <- outgoingCh:
 				fmt.Println(msg)
 		}
