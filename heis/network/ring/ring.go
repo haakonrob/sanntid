@@ -3,6 +3,7 @@ package ring
 import (
 	"net"
 	"fmt"
+	"time"
 	//"errors"
 )
 
@@ -49,25 +50,35 @@ func PrevNode(incomingCh chan string, updateCh chan string, port int){
 	for {
 		if !initialised {
 			ln, _ := net.ListenTCP("tcp", TCPAddr)
+			fmt.Println("Set up listener")
 			conn, err = ln.Accept()
-			if err != nil {
+			//fmt.Println("New PrevNode")
+			if err == nil {
 				initialised = true
+				fmt.Println("initialised: ")
+			} else {
+				fmt.Println(err)
+				time.Sleep(time.Second)
 			}
 		}
 		select {
 		case update := <-updateCh:
 			if update == "RESET" {
+				
 				initialised = false
 			}
 		default:
-			n, err := conn.Read(buf[0:])
-			if err != nil {
-					initialised = false
-					conn.Close()
+			if initialised {
+				fmt.Println("Trying to read")
+				n, err := conn.Read(buf[0:])
+				fmt.Println("Successfully read")
+				if err != nil {
+						initialised = false
+						conn.Close()
+				}
+				msg := string(buf[:n])
+				incomingCh<-msg
 			}
-			msg := string(buf[:n])
-			incomingCh<-msg
 		}
 	}
 }
-

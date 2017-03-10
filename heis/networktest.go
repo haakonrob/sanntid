@@ -2,20 +2,20 @@ package main
 
 import (
 	"fmt"
-	"./networkmodule/networkmonitor"
+	"./network"
 )
 
 func main(){
-	nodeChan := make(chan string)
-	monitorChan := make(chan string)
-	networkmonitor.NetworkMonitor(nodeChan, monitorChan)
-
+	
+	incomingCh := make(chan string)
+	outgoingCh := make(chan string)
+	go network.Monitor(incomingCh, outgoingCh)
 	for {
 		select {
-			case msg := <- nodeChan:
+			case msg := <- incomingCh:
 				fmt.Println(msg)
-				nodeChan<- msg
-			case msg := <- monitorChan:
+				outgoingCh<- msg
+			case msg := <- outgoingCh:
 				fmt.Println(msg)
 		}
 	}
