@@ -10,10 +10,10 @@ import (
 
 
 const (
-	NUM_FLOORS = driver.N_FLOORS
-	UP = driver.BUTTON_CALL_UP
-	DOWN = driver.BUTTON_CALL_DOWN
-	COMMAND = driver.BUTTON_COMMAND
+	NUM_FLOORS 	= driver.N_FLOORS
+	UP 			= driver.BUTTON_CALL_UP
+	DOWN 		= driver.BUTTON_CALL_DOWN
+	COMMAND 	= driver.BUTTON_COMMAND
 )
 
 type State int
@@ -50,45 +50,51 @@ var newEvent driver.Event
 var updateFlag bool
 
 func Fsm(eventChan chan driver.Event, coordinatorChan chan LocalOrderState) {
+	
 	fsmInit()
+
 	for {
 		select {
 			case newEvent = <-eventChan:
-				fmt.Println("Event:", newEvent)
+				fmt.Println("FSM newEvent chan:", newEvent)
 				stateTable[elevState][newEvent.Type]()
 				newEvent = driver.Event{driver.NOTHING, 0}
+
 			case newOrders := <-coordinatorChan:
+				fmt.Println("FSM newOrder chan:")
+				
 				orders.Pending = newOrders.Pending
 				orders.Completed = newOrders.Completed
-				fmt.Println("C pend:", orders.Pending)
-				fmt.Println("C comp:", orders.Completed)
+				stateTable[elevState][newEvent.Type]()
+
+				fmt.Println(" FSM C pend: \n", orders.Pending)
+				fmt.Println(" \n FSM C comp: \n", orders.Completed)
+			
 			default:
+				time.Sleep(time.Millisecond*200)
+
+				//fmt.Println("FSM State: ", elevState)
+				//fmt.Println("FSM newEvent: ", newEvent)
+
 				if updateFlag {
 					fmt.Println("trying to update coordinator")
 					coordinatorChan<-orders
 					fmt.Println("Update succesful")
 					updateFlag = false
-				}
-				if elevState == IDLE_STATE {
+					elevState = IDLE_STATE
+
+					//wait for door to close...
+					time.Sleep(time.Second*6)
 					stateTable[elevState][newEvent.Type]()
-					newEvent = driver.Event{driver.NOTHING, 0}
 				}
+				
 		}
 		
 	}
 
 }
 
-func fsmInit() {
-	// call getFloorSensor(), if undefined, move to a floor
-	elev_move_up()
-	for driver.ElevGetFloorSensorSignal() == -1 {}
-	elev_stop()
-	orders.PrevFloor = driver.ElevGetFloorSensorSignal()
-	elevState = IDLE_STATE
-	updateFlag = false
-	newEvent = driver.Event{driver.NOTHING, 0}
-}
+
 
 func null() {
 	//fmt.Println("null")
@@ -96,6 +102,8 @@ func null() {
 }
 
 func next_order() {
+	fmt.Println("fsm next order func ")
+
 	pending := orders.Pending
 	completed := orders.Completed
 	foundOrder := false
@@ -135,16 +143,18 @@ func complete_order(floor int) {
 			orders.Completed[ordertype][orders.PrevFloor] = true
 		}
 	}
+
 	elevState = STOPPED_OPEN_STATE
 	updateFlag = true
 	elev_stop()
 	fmt.Println("complete_order:", orders.Completed)
-	go doorTimer()
-
 	
+
+	go doorTimer()
 }
 
 func doorTimer(){
+		fmt.Println("opening doors")
 		driver.ElevSetDoorOpenLamp(true)
 		time.Sleep(time.Second*3)
 		// Preferably replace with an event
@@ -198,5 +208,16 @@ func elev_move_down() {
 	driver.ElevSetMotorDirection(driver.DIRN_DOWN)
 	orders.Direction = driver.DIRN_DOWN
 	
+}
+
+func fsmInit() {
+	// call getFloorSensor(), if undefined, move to a floor
+	elev_move_up()
+	for driver.ElevGetFloorSensorSignal() == -1 {}
+	elev_stop()
+	orders.PrevFloor = driver.ElevGetFloorSensorSignal()
+	elevState = IDLE_STATE
+	updateFlag = false
+	newEvent = driver.Event{driver.NOTHING, 0}
 }
 //>>>>>>> 78f8e02a8fbc3791b0e64b10b75e0a0c20bff8e0
