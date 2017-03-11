@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 )
+
 /******************************************
-TODO 
+TODO
 Cleanup, move some funcs to driver
 Improve order selection alg
 
@@ -60,19 +61,17 @@ func Fsm(eventChan chan driver.Event, coordinatorChan chan LocalOrderState) {
 	for {
 		select {
 		case newEvent = <-eventChan:
-			fmt.Println("FSM newEvent chan:", newEvent)
 			stateTable[elevState][newEvent.Type]()
 			newEvent = driver.Event{driver.NOTHING, 0}
 
 		case newOrders := <-coordinatorChan:
-			fmt.Println("FSM newOrder chan:")
 
 			orders.Pending = newOrders.Pending
 			orders.Completed = newOrders.Completed
 			stateTable[elevState][newEvent.Type]()
 
-			fmt.Println(" FSM C pend: \n", orders.Pending)
-			fmt.Println(" \n FSM C comp: \n", orders.Completed)
+			//fmt.Println(" FSM C pend: \n", orders.Pending)
+			//fmt.Println(" \n FSM C comp: \n", orders.Completed)
 
 		default:
 			time.Sleep(time.Millisecond * 200)
@@ -104,7 +103,6 @@ func null() {
 }
 
 func next_order() {
-	fmt.Println("fsm next order func ")
 
 	pending := orders.Pending
 	completed := orders.Completed
@@ -149,24 +147,25 @@ func complete_order(floor int) {
 	elevState = STOPPED_OPEN_STATE
 	updateFlag = true
 	elev_stop()
-	fmt.Println("complete_order:", orders.Completed)
+	//fmt.Println("complete_order:", orders.Completed)
 
 	go doorTimer()
 }
 
 /****Prefereably replace with event******/
-func doorTimer(){
-		fmt.Println("opening doors")
-		driver.ElevSetDoorOpenLamp(true)
-		time.Sleep(time.Second*3)
-		// Preferably replace with an event
-		driver.ElevSetDoorOpenLamp(false)
-		elevState = IDLE_STATE
-	}
+func doorTimer() {
+	//fmt.Println("opening doors")
+	driver.ElevSetDoorOpenLamp(true)
+	time.Sleep(time.Second * 3)
+	// Preferably replace with an event
+	driver.ElevSetDoorOpenLamp(false)
+	elevState = IDLE_STATE
+}
+
 /*****************************************/
 
 func newFloor() {
-	fmt.Println("new Floor")
+	//fmt.Println("new Floor")
 	orders.PrevFloor = newEvent.Val
 	floor := orders.PrevFloor
 	driver.ElevSetFloorIndicator(floor)
@@ -185,21 +184,20 @@ func EM_stop() {
 		elev_stop()
 		driver.ElevSetDoorOpenLamp(false)
 		elevState = STOPPED_CLOSED_STATE
-		fmt.Println("Emergency stop")
+		//fmt.Println("Emergency stop")
 	}
 }
 
 func end_EM_stop() {
 	if newEvent.Val == 0 {
 		elevState = IDLE_STATE
-		fmt.Println("Now idle")
+		//fmt.Println("Now idle")
 	}
 }
 
 /*****Consider moving to driver.go*******/
 
-func elev_stop(){
->>>>>>> 19c78fc5ff67bf3f2dcbd5dc6c84efed8256e27f
+func elev_stop() {
 	driver.ElevSetMotorDirection(driver.DIRN_STOP)
 	orders.Direction = driver.DIRN_STOP
 }
@@ -229,4 +227,3 @@ func fsmInit() {
 	updateFlag = false
 	newEvent = driver.Event{driver.NOTHING, 0}
 }
-

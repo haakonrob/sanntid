@@ -26,7 +26,7 @@ const peerPort = 20005
 const ringport = 20006
 const UDPPasscode = "svekonrules"
 
-func Monitor(statusCh chan string, incomingCh chan string, outgoingCh chan string) {
+func Monitor(statusCh chan string, incomingCh chan []byte, outgoingCh chan []byte) {
 
 	/*
 		The id is either 4th number of the local IPv4, or the PID of the

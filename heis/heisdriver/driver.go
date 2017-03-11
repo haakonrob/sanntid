@@ -25,6 +25,7 @@ var buttonChannelMatrix = [N_FLOORS][N_BUTTONS]int{
 }
 
 type ElevMotorDirection int
+
 const (
 	DIRN_DOWN ElevMotorDirection = -1 << iota
 	DIRN_STOP
@@ -32,6 +33,7 @@ const (
 )
 
 type ElevButtonType int
+
 const (
 	BUTTON_CALL_UP ElevButtonType = iota
 	BUTTON_CALL_DOWN
@@ -45,6 +47,7 @@ type Order struct {
 }
 
 type EventType int
+
 const (
 	NOTHING = iota
 	FLOOR_EVENT
@@ -62,15 +65,13 @@ func Poller(orders chan Order, events chan Event) {
 	var atFloor bool = true
 	var stopped bool
 	var obstructed bool
-	
+
 	for {
-		time.Sleep(time.Millisecond*200)
+		time.Sleep(time.Millisecond * 200)
 
 		currFloor := ElevGetFloorSensorSignal()
 		stopButton := ElevGetStopSignal()
 		obstructionSwitch := ElevGetObstructionSignal()
-
-
 
 		if currFloor != -1 && !atFloor {
 			atFloor = true
@@ -94,8 +95,6 @@ func Poller(orders chan Order, events chan Event) {
 			obstructed = false
 			events <- Event{OBSTRUCTION_EVENT, 0}
 		}
-
-
 
 		for i := 0; i < N_FLOORS-1; i++ {
 			press := ElevGetButtonSignal(BUTTON_CALL_UP, i)
@@ -129,14 +128,11 @@ func Poller(orders chan Order, events chan Event) {
 
 func ElevSetMotorDirection(dirn ElevMotorDirection) {
 	if dirn == DIRN_STOP {
-		fmt.Println("STOP")
 		IoWriteAnalog(MOTOR, 0)
 	} else if dirn == DIRN_UP {
-		fmt.Println("UP")
 		IoClearBit(MOTORDIR)
 		IoWriteAnalog(MOTOR, MOTOR_SPEED)
 	} else if dirn == DIRN_DOWN {
-		fmt.Println("DOWN")
 		IoSetBit(MOTORDIR)
 		IoWriteAnalog(MOTOR, MOTOR_SPEED)
 	} else {

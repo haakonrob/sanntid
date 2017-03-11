@@ -2,13 +2,15 @@ package main
 
 import (
 	"./fsm"
-	"./network"
 	heis "./heisdriver" //"./simulator/client"
+	"./network"
 	"encoding/json"
 	"fmt"
 	_ "os"
+	"strings"
 	"time"
 )
+
 /******************************************
 TODO - Functionality
 Insert logic for network state ( monitor returns {online, ID, activeElevs} )
@@ -23,10 +25,9 @@ Add timestamping logic
 Data logging for backup in case of crash/termination
 
 
-DISCUSS 
+DISCUSS
 Timestamps in Taken instead of heisnr?
 ******************************************/
-
 
 //elevtype heis.ElevType = heis.ET_Simulation
 
@@ -39,12 +40,13 @@ const (
 )
 
 type GlobalOrderStruct struct {
-	Available         [2][N_FLOORS]bool                  //'json:"Available"'
-	Taken             [2][N_FLOORS]bool                  //'json:"Taken"'
-	Timestamps        [2][N_FLOORS]time.Time             //'json:"Timestamps"'
+	Available  [2][N_FLOORS]bool      //'json:"Available"'
+	Taken      [2][N_FLOORS]bool      //'json:"Taken"'
+	Timestamps [2][N_FLOORS]time.Time //'json:"Timestamps"'
 	//Clock             uint                               //'json:"Clock"'
-	Scores            make(map[string][2][N_FLOORS]int)//[MAX_NUM_ELEVS][2][N_FLOORS]int    //'json:"Scores"'
+	Scores            map[string][2][N_FLOORS]int        //[MAX_NUM_ELEVS][2][N_FLOORS]int    //'json:"Scores"'
 	LocalOrdersBackup [MAX_NUM_ELEVS]fsm.LocalOrderState //'json:"LocalOrdersBackup"'
+	SenderId          string
 } //
 
 var (
@@ -52,9 +54,9 @@ var (
 	//unverified_GlobalOrders GlobalOrderStruct
 	LocalOrders fsm.LocalOrderState
 
-	online         bool
-	localElevIndex int
-	activeElevs    []int
+	online      bool
+	localID     string
+	activeElevs []string
 
 	orderTimestamp int
 )
@@ -72,9 +74,8 @@ func main() {
 
 	// Init stuff
 	/************************/
-	localElevIndex = 0
 	online = false
-	activeElevs = make([]int, 0, MAX_NUM_ELEVS)
+	activeElevs = make([]string, 0, MAX_NUM_ELEVS)
 
 	// Sets all Taken values to -1. Not o because 0 can be a elevIndex
 	for ordertype := UP; ordertype <= DOWN; ordertype++ {
@@ -89,8 +90,8 @@ func main() {
 	eventChan := make(chan heis.Event, 5)
 	fsmChan := make(chan fsm.LocalOrderState)
 
-	incomingCh := make(chan GlobalOrders)
-	outgoingCh := make(chan GlobalOrders)
+	incomingCh := make(chan []byte)
+	outgoingCh := make(chan []byte)
 	networkCh := make(chan string)
 
 	/*****ADD*****
@@ -99,9 +100,10 @@ func main() {
 	heis.ElevInit()
 	go heis.Poller(orderChan, eventChan)
 	go fsm.Fsm(eventChan, fsmChan)
-	go network.Monitor()
+	go network.Monitor(networkCh, incomingCh, outgoingCh)
 	/*****ADD*****
 	go networkMonitor(network)
+
 
 	**************/
 	//timestamp := time.Now()
@@ -123,6 +125,8 @@ func main() {
 			} else {
 				//update global avaliable
 				updateGlobalOrders(newOrder)
+				GlobalOrders.SenderId = localID
+				outgoingCh <- EncodeGlobalPacket()
 				//save in buffer
 			}
 		case completedOrders := <-fsmChan:
@@ -135,19 +139,31 @@ func main() {
 			} else {
 				//update global complete
 				updateGlobalComplete(completedOrders)
+				GlobalOrders.SenderId = localID
+				outgoingCh <- EncodeGlobalPacket()
+
 				//save in bufferout on network
 
 			}
 
-		
-		case newGlobalOrders := <-incomingCh:
-			mergeOrders(newGlobalOrders)
-			time.Sleep(time.Millisecond*100)
-			outgoingCh <- GlobalOrders
-			fmt.Println(GlobalOrders)
+		case status := <-networkCh:
+			online, localID, activeElevs = decodeNetworkStatus(status)
+		case msg := <-incomingCh:
+			oldGlobalOrders := GlobalOrders
+			DecodeGlobalPacket(msg)
+			mergeOrders(oldGlobalOrders)
+			//time.Sleep(time.Millisecond * 100)
+
+			scoreOrders()
+
+			if GlobalOrders.SenderId == localID {
+				takeGlobalOrders()
+			} else {
+				outgoingCh <- EncodeGlobalPacket()
+				fmt.Println("Global orders: ", GlobalOrders.Available)
+			}
 
 			//update global all
-			
 
 			/*********ADD*********
 
@@ -163,33 +179,7 @@ func main() {
 				//set your score
 				//update global scores
 
-				//send msg
-
-		
-		/*********************
-
-
-			/******MAYBE********
-			MSG = decode(msg)
-			// replace with handle_msg()
-
-			if MSG.header == "orders"{
-				unverified_GlobalState = mergeOrders(LocalState, newGlobalState)
-				//unverified_GlobalState = scoreOrders(unverified_GlobalState)
-				msg = encode(unverified_GlobalState)
-				networkChan<- msg
-				status := <-networkchan
-				if status == "SUCCESS" {
-					GlobalState = unverified_GlobalState
-				} else {
-					//troubleshoot network
-					online = false
-				}
-				updateLights()
-
-			}
-			updateLights()
-			/**********************/
+				//send msg*/
 
 		default:
 			//timeout error handeling
@@ -218,22 +208,6 @@ func main() {
 				}
 			}*/
 
-			/********MAYBE********
-			// COULD ALSO BE DONE THROUGH THE CHANNEL
-			online, localElevIndex, activeElevs = network.getNetworkState()
-			**********************/
-			/********REMOVE*******
-			//getNextOrder()
-			if time.Since(timestamp) > time.Second*100 {
-				//online = false
-				// testing getNextOrder(). Works!
-				fmt.Println("timer, global avalable: ", GlobalOrders.Available)
-				fmt.Println("timer, global taken: ", GlobalOrders.Taken)
-				fmt.Println(getNextOrder())
-				timestamp = time.Now()
-			}
-			*********************/
-			// set nextOrder?
 			continue
 		}
 	}
@@ -246,45 +220,20 @@ updateGlobalState()
 
 *********************************/
 
-func addNewOrder(order heis.Order) {
-	ordertype := order.OrderType
-	floor := order.Floor
-	switch ordertype {
-	case UP:
-		if online {
-			//unverified_GlobalOrders.Available[ordertype][floor] = true
-		} else {
-			LocalOrders.Pending[ordertype][floor] = true
-			LocalOrders.Completed[ordertype][floor] = false
-		}
-	case DOWN:
-		if online {
-			//unverified_GlobalOrders.Available[ordertype][floor] = true
-		} else {
-			LocalOrders.Pending[ordertype][floor] = true
-			LocalOrders.Completed[ordertype][floor] = false
-		}
-	case COMMAND:
-		LocalOrders.Pending[ordertype][floor] = true
-		LocalOrders.Completed[ordertype][floor] = false
-	default:
-		fmt.Println("Invalid OrderType in addNewOrder()")
+func decodeNetworkStatus(str string) (bool, string, []string) {
+	status := strings.Split(str, "_")
+	online := false
+	if status[0] == "true" {
+		online = true
 	}
+	ID := status[1]
+	list := strings.Split(status[2], "-")
+	return online, ID, list
 }
 
 func updateLocalState(newLocalState fsm.LocalOrderState) {
 	LocalOrders.PrevFloor = newLocalState.PrevFloor
 	LocalOrders.Direction = newLocalState.Direction
-	/*if online {
-		LocalOrders.Completed = newLocalState.Completed
-	} else {
-		LocalOrders.Completed = {{0}}
-	}
-	for ordertype := UP; ordertype <= COMMAND; ordertype++ {
-		for floor := 0; floor < N_FLOORS; floor++ {
-			LocalOrders.Pending[ordertype][floor] = LocalOrders.Pending[ordertype][floor] && !(LocalOrders.Completed[ordertype][floor])
-		}
-	}*/
 }
 
 /**************sverre lør***************************/
@@ -334,6 +283,7 @@ func updateGlobalOrders(order heis.Order) {
 		GlobalOrders.Available[ordertype][floor] = true
 		GlobalOrders.Taken[ordertype][floor] = false
 		GlobalOrders.Timestamps[ordertype][floor] = stamp
+
 	case DOWN:
 
 		GlobalOrders.Available[ordertype][floor] = true
@@ -344,14 +294,6 @@ func updateGlobalOrders(order heis.Order) {
 		fmt.Println("Invalid OrderType in updateglobalorders()")
 	}
 
-	/*for ordertype := UP; ordertype <= DOWN; ordertype++ {
-		for floor := 0; floor < N_FLOORS; floor++ {
-			if !GlobalOrders.Available[ordertype][floor] && LocalOrders.Pending[ordertype][floor] {
-				!GlobalOrders.Available[ordertype][floor] = LocalOrders.Pending[ordertype][floor]
-				GlobalOrders.Timestamps[ordertype][floor] = stamp
-			}
-		}
-	}*/
 }
 
 func updateGlobalComplete(newLocalState fsm.LocalOrderState) {
@@ -365,26 +307,6 @@ func updateGlobalComplete(newLocalState fsm.LocalOrderState) {
 	}
 }
 
-func scoresDone() {
-
-	for k, v := range GlobalOrders.Scores{
-
-	}
-
-
-	for ordertype := UP; ordertype <= DOWN; ordertype++ {
-		for floor := 0; floor < N_FLOORS; floor++ {
-			if !GlobalOrders.Taken[ordertype][floor] && LocalOrders.Completed[ordertype][floor] {
-				//!GlobalOrders.Taken[ordertype][floor] && LocalOrders.Completed[ordertype][floor]
-			}
-		}
-	}
-
-	//GlobalOrders.Taken[][][]
-	//Scores            [MAX_NUM_ELEVS][2][N_FLOORS]int    //'json:"Scores"'
-
-}
-
 /*************************************************/
 
 func updateGlobalState() {
@@ -395,7 +317,6 @@ func updateGlobalState() {
 }
 
 func setLights() {
-
 	for b := 0; b < heis.N_BUTTONS-1; b++ {
 		for floor := 0; floor < N_FLOORS; floor++ {
 			if GlobalOrders.Available[b][floor] || GlobalOrders.Taken[b][floor] {
@@ -408,6 +329,7 @@ func setLights() {
 	}
 }
 
+/*
 // getNextOrder() will be replaced by updateLocalOrders() AND mergeOrders()()
 func getNextOrder() (heis.ElevButtonType, int, bool) {
 	//IMPROVEMENTS:
@@ -428,16 +350,23 @@ func getNextOrder() (heis.ElevButtonType, int, bool) {
 	}
 	return -1, -1, false
 }
+*/
 
 func scoreOrders() {
+	var scoresTemp [2][N_FLOORS]int
+
 	for ordertype := UP; ordertype <= DOWN; ordertype++ {
 		for floor := 0; floor < N_FLOORS; floor++ {
 			//INSERT COST FUNC HERE
 			//simple:
 			//GlobalOrders.Available[ordertype][floor]
 
-			GlobalOrders.Scores[localElevIndex][ordertype][floor] = 10 //LocalOrders.Pending[ordertype][floor]*10;
+			scoresTemp[ordertype][floor] = 10 //LocalOrders.Pending[ordertype][floor]*10;
 		}
+	}
+	if _, ok := GlobalOrders.Scores[localID]; ok {
+		GlobalOrders.Scores[localID] = scoresTemp
+
 	}
 }
 
@@ -447,23 +376,32 @@ func isBestScore(ordertype heis.ElevButtonType, floor int) bool {
 	if len(activeElevs) == 0 || !online {
 		return true
 	}
-	for _, extElevIndex := range activeElevs {
-		if GlobalOrders.Scores[localElevIndex][ordertype][floor] < GlobalOrders.Scores[extElevIndex][ordertype][floor] {
-			return false
+
+	for _, elevID := range activeElevs {
+		if value, ok := GlobalOrders.Scores[elevID]; ok {
+			if GlobalOrders.Scores[localID][ordertype][floor] < value[ordertype][floor] {
+				return false
+			} else if GlobalOrders.Scores[elevID][ordertype][floor] == 0 {
+				return false
+			}
 		}
+
 	}
 	return true
 }
 
-/********REMOVE**********************************************************************/
-// LocalOrders are either updated through the fsmChan or updateLocalOrders()
-func completeOrder(order heis.Order) {
-	LocalOrders.Pending[order.OrderType][order.Floor] = false
-	LocalOrders.Completed[order.OrderType][order.Floor] = true
-	// Turn off light?
-	// GlobalOrders.Available[i] = false
-	// GlobalOrders.Taken[i] = -1
-	// stop and open doors
+func takeGlobalOrders() {
+
+	for ordertype := UP; ordertype <= DOWN; ordertype++ {
+		for floor := 0; floor < N_FLOORS; floor++ {
+			if isBestScore(ordertype, floor) && GlobalOrders.Available[ordertype][floor] {
+				GlobalOrders.Available[ordertype][floor] = false
+				GlobalOrders.Taken[ordertype][floor] = true
+				LocalOrders.Pending[ordertype][floor] = true
+
+			}
+		}
+	}
 }
 
 func mergeOrders(newGlobalOrders GlobalOrderStruct) {
