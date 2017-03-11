@@ -4,40 +4,59 @@ import(
 	"fmt"
 	"encoding/json"
 	"./fsm"
-	heis "./heisdriver"
+	heis "./heisdriver"//"./simulator/client"
 	_"os"
 	"time"
 )
+/******************************************
+TODO - Functionality
+Insert logic for network state ( monitor returns {online, ID, activeElevs} )
+Cost function for scoring of orders
+Better logic for taking orders - all active elevs must have a score in order to take an order, when taking, set all scores to -1.
+Maybe redundant - add a way of seeing if all elevs have viewed the packet
+Change global orders Scores and Backup to maps for use with elev IDs
+change localElevIndex to ID string, returned from networkmonitor. OR set at start like in example code.
+
+TODO - Fault tolerance
+Add timestamping logic
+Data logging for backup in case of crash/termination
+
+
+DISCUSS 
+Timestamps in Taken instead of heisnr?
+******************************************/
+
+
+//elevtype heis.ElevType = heis.ET_Simulation
 
 const ( 
-	MAX_NUM_ELEVS = 10
- 	N_FLOORS = heis.N_FLOORS
-	UP = heis.BUTTON_CALL_UP
-	DOWN = heis.BUTTON_CALL_DOWN
-	COMMAND = heis.BUTTON_COMMAND
+	MAX_NUM_ELEVS 	= 10
+ 	N_FLOORS 		= heis.N_FLOORS
+	UP 				= heis.BUTTON_CALL_UP
+	DOWN 			= heis.BUTTON_CALL_DOWN
+	COMMAND 		= heis.BUTTON_COMMAND
 )
 
 type GlobalOrderStruct struct {
-	Available [2][N_FLOORS] bool
-	Taken [2][N_FLOORS] int
-	Timestamps [2][N_FLOORS] uint
-	Clock uint
-	Scores [MAX_NUM_ELEVS][2][N_FLOORS] int
-	LocalOrdersBackup[MAX_NUM_ELEVS] fsm.LocalOrderState
-}
+	Available [2][N_FLOORS] 	bool						//'json:"Available"'
+	Taken [2][N_FLOORS] 		int 						//'json:"Taken"'
+	Timestamps [2][N_FLOORS] 	uint 						//'json:"Timestamps"'
+	Clock 								uint 				//'json:"Clock"'
+	Scores [MAX_NUM_ELEVS][2][N_FLOORS] int 				//'json:"Scores"'
+	LocalOrdersBackup[MAX_NUM_ELEVS] 	fsm.LocalOrderState //'json:"LocalOrdersBackup"'
+}//
 
 var (
-	GlobalOrders GlobalOrderStruct
-	unverified_GlobalOrders GlobalOrderStruct
-	LocalOrders fsm.LocalOrderState		
-	/******REMOVE*********/
-	prevFloor int
-	currDir heis.ElevMotorDirection
-	 /*****REMOVE*********/
+	GlobalOrders 			GlobalOrderStruct
+	unverified_GlobalOrders 	GlobalOrderStruct
+	LocalOrders 			fsm.LocalOrderState		
 	
-	online bool
-	localElevIndex int
-	activeElevs []int
+	online 			bool
+	localElevIndex 	int
+	activeElevs 	[]int
+
+	orderTimestamp 	int
+
 )
 
 /*********************************
@@ -53,10 +72,11 @@ func main(){
 	
 	// Init stuff
 	/************************/
-	localElevIndex = 0;
-	online = false
-	activeElevs = make([]int, 0, MAX_NUM_ELEVS)
+	localElevIndex 	= 0;
+	online 			= false
+	activeElevs 	= make([]int, 0, MAX_NUM_ELEVS)
 	
+
 	// Sets all Taken values to -1. Not o because 0 can be a elevIndex
 	for ordertype := UP;ordertype <=DOWN; ordertype++ {
     	for _, floor := range(GlobalOrders.Taken[ordertype]) {
@@ -66,10 +86,23 @@ func main(){
 	}
 	/************************/
 
-	orderChan := make(chan heis.Order, 5) 
-	eventChan := make(chan heis.Event, 5)
-	fsmChan := make(chan fsm.LocalOrderState)
+	orderChan 	:= make(chan heis.Order, 5) 
+	eventChan 	:= make(chan heis.Event, 5)
+	fsmChan 	:= make(chan fsm.LocalOrderState)
 	
+	
+	//*******TEST DECODING ENCODING PACKET*********
+	GlobalPacketENC := EncodeGlobalPacket()
+	//fmt.Println(string(GlobalPacketENC))
+	_ = GlobalPacketENC
+
+	GlobalPacketDEC ,err := DecodeGlobalPacket(GlobalPacketENC)
+	fmt.Println("Test PacketDEC: ", GlobalPacketDEC.Taken)
+	_ = err
+	//****************************************
+
+
+
 	/*****ADD*****
 	networkChan := make(chan string)
 	**************/
@@ -80,19 +113,25 @@ func main(){
 	go networkMonitor(network)
 	
 	**************/
-	timestamp := time.Now()
+	//timestamp := time.Now()
 	for {
 		// online, localElevIndex,  = networkStatus()
 		select {
 			case newOrder := <-orderChan:
-				fmt.Println("Order:",newOrder)
+				fmt.Println("Coord Order:",newOrder)
 				addNewOrder(newOrder)
 				if !online {
+					fmt.Println("Coord sending")
+					time.Sleep(time.Millisecond*5)
 					fsmChan<-LocalOrders
 				}
 			case completedOrders := <-fsmChan:
+				fmt.Println("Coord completed fsm")
+
 				updateLocalState(completedOrders)
 				updateGlobalState()
+
+
 			/*********ADD*********
 			case msg := <-networkChan:
 				MSG = decode(msg)
@@ -103,17 +142,17 @@ func main(){
 					msg = encode(unverified_GlobalState)
 					networkChan<- msg
 					status := <-networkchan
-					if status == "SUCCESS" {
+					if status == "OK" {
 						GlobalState = unverified_GlobalState	
 					} else {
 						//troubleshoot network
 						online = false
 					}
 					updateLights()
-					}
+					
 				}
 				updateLights() 
-			**********************/
+			/**********************/
 			
 			
 			default:
@@ -121,16 +160,17 @@ func main(){
 				// COULD ALSO BE DONE THROUGH THE CHANNEL
 				online, localElevIndex, activeElevs = network.getNetworkState()
 				**********************/
-				/********REMOVE*******/
+				/********REMOVE*******
 				//getNextOrder()
 				if time.Since(timestamp) > time.Second*100 {
+					//online = false
 					// testing getNextOrder(). Works!
-					fmt.Println(GlobalOrders.Available)
-					fmt.Println(GlobalOrders.Taken)
+					fmt.Println("timer, global avalable: ", GlobalOrders.Available)
+					fmt.Println("timer, global taken: ", GlobalOrders.Taken)
 					fmt.Println(getNextOrder())
 					timestamp = time.Now()
 				}
-				/*********************/
+				*********************/
 				// set nextOrder?
 				continue
 		}
@@ -210,7 +250,10 @@ func scoreOrders(){
 	for ordertype := UP; ordertype <=DOWN; ordertype++ {
 		for floor := 0; floor<N_FLOORS; floor++ {
 			//INSERT COST FUNC HERE
-			GlobalOrders.Scores[localElevIndex][ordertype][floor] = 10;
+			//simple:
+			//GlobalOrders.Available[ordertype][floor]
+
+			GlobalOrders.Scores[localElevIndex][ordertype][floor] = 10;//LocalOrders.Pending[ordertype][floor]*10;
 		}
 	}
 }
@@ -291,4 +334,34 @@ func mergeOrders(newGlobalOrders GlobalOrderStruct){
 			}
 		}
 	}
+}
+
+
+
+
+
+/*
+type GlobalOrderStruct struct {
+	Available [2][N_FLOORS] bool
+	Taken [2][N_FLOORS] int
+	Timestamps [2][N_FLOORS] uint
+	Clock uint
+	Scores [MAX_NUM_ELEVS][2][N_FLOORS] int
+	LocalOrdersBackup[MAX_NUM_ELEVS] fsm.LocalOrderState
+}*/
+
+func EncodeGlobalPacket()(b []byte){
+	GlobalPacketD, err := json.Marshal(GlobalOrders)
+	_ = err
+	return GlobalPacketD
+}
+
+func DecodeGlobalPacket(JsonPacket []byte) (PacketDEC GlobalOrderStruct ,err error){
+
+	var GlobalPacketDEC GlobalOrderStruct
+
+	err = json.Unmarshal(JsonPacket, &GlobalPacketDEC)
+	_ = err
+
+	return GlobalPacketDEC, err
 }
