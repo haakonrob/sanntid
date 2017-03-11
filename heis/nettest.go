@@ -3,22 +3,23 @@ package main
 import (
 	"./network"
 	"fmt"
-	"runtime"
+	_ "runtime"
 	"strings"
 	"time"
 )
 
 func main() {
-	runtime.GOMAXPROCS(20)
+
 	incomingCh := make(chan string, 1)
 	outgoingCh := make(chan string, 1)
 	networkCh := make(chan string, 1)
 
-	timestamp := time.Now()
 	var online bool = false
 	var localID string
 	activeElevs := make([]string, 0, 10)
+
 	go network.Monitor(networkCh, incomingCh, outgoingCh)
+
 	for {
 		select {
 		case msg := <-networkCh:
@@ -30,12 +31,10 @@ func main() {
 
 		case msg := <-incomingCh:
 			fmt.Println("Received: ", msg)
+			time.Sleep(time.Second)
+			outgoingCh <- msg
 		default:
 			continue
-			if online && (time.Since(timestamp) > time.Second) {
-				timestamp = time.Now()
-				outgoingCh <- "hello"
-			}
 		}
 	}
 }
