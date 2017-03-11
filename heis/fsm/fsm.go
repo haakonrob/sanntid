@@ -29,11 +29,11 @@ This variable is used as means of communication between the coordinator and the 
 The coordinator sets the Pending array, and fsm sets the completed, orders.PrevFloor and direction variables.
 */
 type LocalOrderState struct {
-	Pending   [3][NUM_FLOORS]bool
-	Completed [3][NUM_FLOORS]bool
-	Timestamps [3][NUM_FLOORS]int
-	PrevFloor int
-	Direction driver.ElevMotorDirection
+	Pending    [3][NUM_FLOORS]bool
+	Completed  [3][NUM_FLOORS]bool
+	Timestamps [3][NUM_FLOORS]time.Time
+	PrevFloor  int
+	Direction  driver.ElevMotorDirection
 }
 
 type stateTransition func()
