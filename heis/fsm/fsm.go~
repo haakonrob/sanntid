@@ -5,12 +5,10 @@ import (
 	"time"
 	driver "../heisdriver"//"../simulator/client"
 )
-/******************************************
-TODO 
-Cleanup, move some funcs to driver
-Improve order selection alg
 
-******************************************/
+//elevtype driver.ElevType = driver.ET_Simulation
+
+
 const (
 	NUM_FLOORS 	= driver.N_FLOORS
 	UP 			= driver.BUTTON_CALL_UP
@@ -154,7 +152,7 @@ func complete_order(floor int) {
 
 	go doorTimer()
 }
-/****Prefereably replace with event******/
+
 func doorTimer(){
 		fmt.Println("opening doors")
 		driver.ElevSetDoorOpenLamp(true)
@@ -163,7 +161,7 @@ func doorTimer(){
 		driver.ElevSetDoorOpenLamp(false)
 		elevState = IDLE_STATE
 	}
-/*****************************************/
+
 func newFloor() {
 	fmt.Println("new Floor")
 	orders.PrevFloor = newEvent.Val

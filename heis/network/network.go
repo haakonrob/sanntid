@@ -10,6 +10,7 @@ import (
 	"strings"
 )
 
+
 // We define some custom struct to send over the network.
 // Note that all members we want to transmit must be public. Any private members
 //  will be received as zero-values.
@@ -25,6 +26,13 @@ const loopBack = false
 const peerPort = 20024
 const TCPPort = 20000
 const UDPPasscode = "svekonrules"
+
+typedef networkstate struct {
+	online bool
+	ID string
+	activeElevs []string
+}
+
 
 func Monitor(coordinatorCh chan string, incomingCh chan string, outgoingCh chan string) {
 

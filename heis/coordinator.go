@@ -8,6 +8,21 @@ import(
 	_"os"
 	"time"
 )
+/******************************************
+TODO - Functionality
+Insert logic for network state ( monitor returns {online, ID, activeElevs} )
+Cost function for scoring of orders
+Better logic for taking orders - all active elevs must have a score in order to take an order, when taking, set all scores to -1.
+Maybe redundant - add a way of seeing if all elevs have viewed the packet
+Change global orders Scores and Backup to maps for use with elev IDs
+change localElevIndex to ID string, returned from networkmonitor. OR set at start like in example code.
+
+TODO - Fault tolerance
+Add timestamping logic
+Data logging for backup in case of crash/termination
+
+******************************************/
+
 
 //elevtype heis.ElevType = heis.ET_Simulation
 
@@ -30,7 +45,7 @@ type GlobalOrderStruct struct {
 
 var (
 	GlobalOrders 			GlobalOrderStruct
-	unverified_GlobalOrders GlobalOrderStruct
+	unverified_GlobalOrders 	GlobalOrderStruct
 	LocalOrders 			fsm.LocalOrderState		
 	
 	online 			bool
@@ -124,7 +139,7 @@ func main(){
 					msg = encode(unverified_GlobalState)
 					networkChan<- msg
 					status := <-networkchan
-					if status == "SUCCESS" {
+					if status == "OK" {
 						GlobalState = unverified_GlobalState	
 					} else {
 						//troubleshoot network
