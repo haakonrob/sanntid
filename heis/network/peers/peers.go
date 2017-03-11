@@ -6,6 +6,7 @@ import (
 	"net"
 	"sort"
 	"time"
+	"strings"
 )
 
 type PeerUpdate struct {
@@ -14,8 +15,8 @@ type PeerUpdate struct {
 	Lost  []string
 }
 
-const interval = 15 * time.Millisecond
-const timeout = 200 * time.Millisecond
+const interval = 100 * time.Millisecond
+const timeout = 500 * time.Millisecond
 
 func Transmitter(port int, id string, subnet string, transmitEnable <-chan bool) {
 
@@ -37,7 +38,7 @@ func Transmitter(port int, id string, subnet string, transmitEnable <-chan bool)
 	}
 }
 
-func Receiver(port int, peerUpdateCh chan<- PeerUpdate) {
+func Receiver(port int, passcode string, peerUpdateCh chan<- PeerUpdate) {
 
 	var buf [1024]byte
 	var p PeerUpdate
@@ -52,7 +53,11 @@ func Receiver(port int, peerUpdateCh chan<- PeerUpdate) {
 		n, _, _ := conn.ReadFrom(buf[0:])
 
 		id := string(buf[:n])
-
+		if strings.Split(id, "_")[0] == passcode {
+			id = strings.Split(id, "_")[1]
+		} else {
+			id = ""
+		}
 		// Adding new connection
 		p.New = ""
 		if id != "" {
@@ -60,14 +65,13 @@ func Receiver(port int, peerUpdateCh chan<- PeerUpdate) {
 				p.New = id
 				updated = true
 			}
-
 			lastSeen[id] = time.Now()
 		}
 
 		// Removing dead connection
 		p.Lost = make([]string, 0)
 		for k, v := range lastSeen {
-			if time.Now().Sub(v) > timeout {
+			if time.Since(v) > timeout {
 				updated = true
 				p.Lost = append(p.Lost, k)
 				delete(lastSeen, k)

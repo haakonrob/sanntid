@@ -1,13 +1,12 @@
 package main
 
 import (
-	"./network/bcast"
-	"./network/localip"
-	"./network/peers"
-	//"./network/ring"
+	"./localip"
+	"./peers"
+	//"./ring"
 	"fmt"
 	"os"
-	"time"
+	//"time"
 	"strings"
 )
 
@@ -21,18 +20,20 @@ type Peer struct {
 }
 
 const MAX_NUM_PEERS = 10
-const subnet = "localhost"
-//const subnet = "sanntidsal"
+//const subnet = "localhost"
+const subnet = "sanntidsal"
 
-func main() {
+func monitor(incomingCh chan string, outgoingCh chan string) {
 	// The id is either 4th number of the local IPv4, or the PID of the 
 	// process, depending on the specified subnet.
 	var local Peer
 	IP, err := localip.LocalIP()
+
 	if err != nil {
 		fmt.Println(err)
 		IP = "DISCONNECTED"
 	}
+
 	switch subnet {
 	case "sanntidsal":
 		local.IP = IP
@@ -42,7 +43,7 @@ func main() {
 		local.ID = fmt.Sprintf("%d",os.Getpid())
 	}
 
-	/* network monitor */
+	/* start monitoring network over UDP */
 	peerUpdateCh := make(chan peers.PeerUpdate)
 	peerTxEnable := make(chan bool)
 	bcastMsg := local.ID+"-"+local.IP
@@ -50,21 +51,11 @@ func main() {
 	go peers.Receiver(15647, peerUpdateCh)
 
 	/* ring network */
-	ringUpdateCh := make(chan [2]string)
-	// go ring.Node(incomingCh, outgoingCh, ringUpdateCh,
-	/*helloTx := make(chan string)
-	helloRx := make(chan string)
-	go bcast.Transmitter(16569, helloTx)
-	go bcast.Receiver(16569, helloRx)
-	// The example message. We just send one of these every second.
-	go func() {
-		helloMsg := "Hello from..." + local.ID
-		for {
-			helloTx <- helloMsg
-			time.Sleep(1 * time.Second)
-		}
-	}()
-	*/
+	ringNextCh := make(chan string)
+	ringPrevCh := make(chan string)
+	go ring.NextNode(outgoingCh, ringNextCh chan string, 20024)
+	go ring.PrevNode(incomingCh, ringPrevCh chan string, 20024)
+	// every node will send a reply when it has been successfully updated. OK or ERROR.
 	
 	fmt.Println("Started")
 	var activePeers = make([]Peer, 0, MAX_NUM_PEERS)
@@ -83,7 +74,7 @@ func main() {
 			fmt.Printf("  New:      %q\n", p.New)
 			fmt.Printf("  Lost:     %q\n", p.Lost)
 			
-		case a := <-helloRx:
+		case a := <-ringUpdateCh:
 			fmt.Printf("Received: %#v\n", a)
 		}
 	}
