@@ -21,6 +21,9 @@ TODO - Fault tolerance
 Add timestamping logic
 Data logging for backup in case of crash/termination
 
+
+DISCUSS 
+Timestamps in Taken instead of heisnr?
 ******************************************/
 
 
