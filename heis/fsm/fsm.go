@@ -31,6 +31,7 @@ The coordinator sets the Pending array, and fsm sets the completed, orders.PrevF
 type LocalOrderState struct {
 	Pending   [3][NUM_FLOORS]bool
 	Completed [3][NUM_FLOORS]bool
+	Timestamps [3][NUM_FLOORS]int
 	PrevFloor int
 	Direction driver.ElevMotorDirection
 }

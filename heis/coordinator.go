@@ -70,7 +70,7 @@ func main() {
 	eventChan := make(chan heis.Event, 5)
 	fsmChan := make(chan fsm.LocalOrderState)
 
-	//*******TEST DECODING ENCODING PACKET*********
+	/*******TEST DECODING ENCODING PACKET*********
 	GlobalPacketENC := EncodeGlobalPacket()
 	//fmt.Println(string(GlobalPacketENC))
 	_ = GlobalPacketENC
@@ -78,7 +78,7 @@ func main() {
 	GlobalPacketDEC, err := DecodeGlobalPacket(GlobalPacketENC)
 	fmt.Println("Test PacketDEC: ", GlobalPacketDEC.Taken)
 	_ = err
-	//****************************************
+	****************************************/
 
 	/*****ADD*****
 	networkChan := make(chan string)
@@ -99,28 +99,37 @@ func main() {
 			
 			if !online {
 				//update local orders
+				updateLocalOrders(newOrder)
 
 				time.Sleep(time.Millisecond * 5)
 				fsmChan <- LocalOrders
 			}else{
 				//update global avaliable
+				updateGlobalOrders(newOrder)
 				//save in buffer
-
 			}
 		case completedOrders := <-fsmChan:
 			fmt.Println("Coord completed order")
 			if !online{
 				//update local complete
-				//updateLocalState(completedOrders) 
+				updateLocalComplete()
+				updateLocalState(completedOrders)
+
 			}
 			else{
 				//update global complete
+				updateGlobalComplete()
 				//save in bufferout on network
+
 			}
 
 		/*********ADD*********
 		case msg := <-networkChan:
+			//decode msg
 			//update global all
+
+			GlobalOrders, err := DecodeGlobalPacket(msg)
+			_ = err
 			
 			
 			//if all scores done && you best score
@@ -131,6 +140,7 @@ func main() {
 				//update local orders from global
 				
 			//else 
+				updateLocalState()
 				//set your score
 				//update global scores
 				
@@ -167,7 +177,21 @@ func main() {
 				//if global taken too long
 					//move from taken to avaliable
 				// 
+			for ordertype := UP; ordertype <= DOWN; ordertype++ {
+				for floor := 0; floor < N_FLOORS; floor++ {
+					if time.Since(GlobalOrder.Timestamps[ordertype][floor]) > time.Second*10{
+						GlobalOrder.Available[ordertype][floor] = true
+						GlobalOrder.Taken[ordertype][floor] = false
+					}
 
+					if time.Since(LocalOrder.Timestamps[ordertype][floor]) > time.Second*10{
+						GlobalOrder.Available[ordertype][floor] = true
+						GlobalOrder.Taken[ordertype][floor] = false
+						LocalOrders.Pending[ordertype][floor] = false
+
+					}
+				}
+			}
 
 
 			/********MAYBE********
@@ -243,23 +267,27 @@ func updateLocalState(newLocalState fsm.LocalOrderState) {
 func updateLocalOrders(order heis.Order){
 	ordertype := order.OrderType
 	floor := order.Floor
+	stamp := time.Now()
 	switch ordertype {
 
 	case UP:
 		LocalOrders.Pending[ordertype][floor] = true
 		LocalOrders.Completed[ordertype][floor] = false
-
+		LocalOrders.Timestamps[ordertype][floor] = stamp
 	case DOWN:
 	
 		LocalOrders.Pending[ordertype][floor] = true
 		LocalOrders.Completed[ordertype][floor] = false
+		LocalOrders.Timestamps[ordertype][floor] = stamp
+
 
 	case COMMAND:
 		LocalOrders.Pending[ordertype][floor] = true
 		LocalOrders.Completed[ordertype][floor] = false
-	
+		LocalOrders.Timestamps[ordertype][floor] = stamp
+		
 	default:
-		fmt.Println("Invalid OrderType in addNewOrder()")
+		fmt.Println("Invalid OrderType in updatelocalorders()")
 	}
 
 }
@@ -273,7 +301,42 @@ func updateLocalComplete(order heis.Order){
 	}
 }
 
+func updateGlobalOrders(){
+	stamp := time.Now()
+	for ordertype := UP; ordertype <= DOWN; ordertype++ {
+		for floor := 0; floor < N_FLOORS; floor++ {
+			if !GlobalOrders.Available[ordertype][floor] && LocalOrders.Pending[ordertype][floor]{
+				!GlobalOrders.Available[ordertype][floor] = LocalOrders.Pending[ordertype][floor]
+				GlobalOrders.Timestamps[ordertype][floor] = stamp 
+			} 
+		}
+	}	
+}
 
+func updateGlobalComplete(){
+	for ordertype := UP; ordertype <= DOWN; ordertype++ {
+		for floor := 0; floor < N_FLOORS; floor++ {
+			if !GlobalOrders.Completed[ordertype][floor] && LocalOrders.Completed[ordertype][floor]{
+				!GlobalOrders.Completed[ordertype][floor] && LocalOrders.Completed[ordertype][floor]
+			} 
+		}
+	}	
+}
+
+func scoresDone(){
+	for ordertype := UP; ordertype <= DOWN; ordertype++ {
+		for floor := 0; floor < N_FLOORS; floor++ {
+			if !GlobalOrders.Completed[ordertype][floor] && LocalOrders.Completed[ordertype][floor]{
+				!GlobalOrders.Completed[ordertype][floor] && LocalOrders.Completed[ordertype][floor]
+			} 
+		}
+	}
+
+	GlobalOrders.Taken[][][]
+	Scores            [MAX_NUM_ELEVS][2][N_FLOORS]int    //'json:"Scores"'
+
+
+}
 /*************************************************/
 
 func updateGlobalState() {
