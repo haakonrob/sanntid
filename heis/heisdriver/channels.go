@@ -1,9 +1,5 @@
 package heisdriver
-/*
-#cgo CFLAGS: -std=c11
-#cgo LDFLAGS: -lcomedi -lm
-*/
-import "C"
+
 
 //in port 4
 const (

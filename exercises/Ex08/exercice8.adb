@@ -8,6 +8,7 @@ procedure exercise7 is
 
     protected type Transaction_Manager (N : Positive) is
         entry Finished;
+        entry Wait_Until_Aborted;
         function Commit return Boolean;
         procedure Signal_Abort;
     private
@@ -38,6 +39,13 @@ procedure exercise7 is
         begin
             return Should_Commit;
         end Commit;
+
+        entry Wait_Until_Aborted when Aborted is
+        begin
+            if Wait_Until_Aborted'Count = 0 then 
+                Aborted := false;
+            end if;
+        end;
         
     end Transaction_Manager;
 
@@ -82,16 +90,23 @@ procedure exercise7 is
             -- PART 2: Do the transaction work here             
             ---------------------------------------
             select
-                Manager.Wait_Until_Abort triggering_alternative   -- eg. X.Entry_Call;
-                        -- code that is run when the triggering_alternative has triggered
-                    --   (forward ER code goes here)
-            
+                Manager.Wait_Until_Aborted;   -- eg. X.Entry_Call;
+                Num := Prev + 5;
+                Put_Line ("  Worker" & Integer'Image(Initial) & " comitting" & Integer'Image(Num));
+                -- code that is run when the triggering_alternative has triggered
+                --   (forward ER code goes here)
             then abort
-                abortable_part
-                -- code that is run when nothing has triggered
-                --   (main functionality)
-            
-            end select;
+                begin
+                    Num := Unreliable_Slow_Add(Prev);
+                    Put_Line ("  Worker" & Integer'Image(Initial) & " comitting" & Integer'Image(Num));
+                    exception
+                        when Count_Failed =>
+                            Manager.Signal_Abort;
+                    -- code that is run when nothing has triggered
+                    --   (main functionality)
+                end;
+                Manager.Finished;
+            end select
 
 
             Prev := Num;

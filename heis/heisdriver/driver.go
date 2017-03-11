@@ -3,6 +3,7 @@ package heisdriver
 import (
 	_ "errors"
 	"fmt"
+	"time"
 )
 
 const N_FLOORS = 4
@@ -63,7 +64,14 @@ func Poller(orders chan Order, events chan Event) {
 	var obstructed bool
 	
 	for {
+		time.Sleep(time.Millisecond*200)
+
 		currFloor := ElevGetFloorSensorSignal()
+		stopButton := ElevGetStopSignal()
+		obstructionSwitch := ElevGetObstructionSignal()
+
+
+
 		if currFloor != -1 && !atFloor {
 			atFloor = true
 			events <- Event{FLOOR_EVENT, currFloor}
@@ -71,7 +79,6 @@ func Poller(orders chan Order, events chan Event) {
 			atFloor = false
 		}
 
-		stopButton := ElevGetStopSignal()
 		if stopButton && !stopped {
 			stopped = true
 			events <- Event{STOP_EVENT, 1}
@@ -80,7 +87,6 @@ func Poller(orders chan Order, events chan Event) {
 			events <- Event{STOP_EVENT, 0}
 		}
 
-		obstructionSwitch := ElevGetObstructionSignal()
 		if obstructionSwitch && !obstructed {
 			obstructed = true
 			events <- Event{OBSTRUCTION_EVENT, 1}
@@ -88,6 +94,8 @@ func Poller(orders chan Order, events chan Event) {
 			obstructed = false
 			events <- Event{OBSTRUCTION_EVENT, 0}
 		}
+
+
 
 		for i := 0; i < N_FLOORS-1; i++ {
 			press := ElevGetButtonSignal(BUTTON_CALL_UP, i)
