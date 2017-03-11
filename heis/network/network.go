@@ -3,7 +3,7 @@ package network
 import (
 	"./localip"
 	"./peers"
-	"./ring"
+	//"./ring"
 	"fmt"
 	"os"
 	"strings"
