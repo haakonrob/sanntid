@@ -8,30 +8,32 @@ import (
 )
 
 func main() {
-	netCh := make(chan string)
-	incomingCh := make(chan string)
-	outgoingCh := make(chan string)
-	timestamp := time.Now()
-	ringMsg := "hello"
 
-	var online bool
+	incomingCh := make(chan string, 1)
+	outgoingCh := make(chan string, 1)
+	networkCh := make(chan string, 1)
+
+	var online bool = false
 	var localID string
-	var activePeers []string
+	activeElevs := make([]string, 0, 10)
 
-	go network.Monitor(netCh, incomingCh, outgoingCh)
+	go network.Monitor(networkCh, incomingCh, outgoingCh)
 
 	for {
 		select {
-		case msg := <-netCh:
-			online, localID, activePeers = decodeNetworkStatus(msg)
-			fmt.Println("Status: ", online, localID, activePeers)
-		case msg := <-incomingCh:
-			fmt.Println(msg)
-		default:
-			if online && (time.Since(timestamp) > time.Second) {
-				timestamp = time.Now()
-				outgoingCh <- ringMsg
+		case msg := <-networkCh:
+			online, localID, activeElevs = decodeNetworkStatus(msg)
+			fmt.Println("Net status: ", online, localID, activeElevs)
+			if activeElevs[0] == localID {
+				outgoingCh <- "hello"
 			}
+
+		case msg := <-incomingCh:
+			fmt.Println("Received: ", msg)
+			time.Sleep(time.Second)
+			outgoingCh <- msg
+		default:
+			continue
 		}
 	}
 }

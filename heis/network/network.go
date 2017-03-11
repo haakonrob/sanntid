@@ -1,13 +1,13 @@
 package network
 
 import (
+	"./bcast"
 	"./localip"
 	"./peers"
-	//"./ring"
 	"fmt"
 	"os"
 	"strings"
-	"time"
+	_ "time"
 )
 
 // We define some custom struct to send over the network.
@@ -22,11 +22,11 @@ type Peer struct {
 const MAX_NUM_PEERS = 10
 const subnet = "sanntidsal" //or localhost
 const loopBack = true
-const peerPort = 20024
-const TCPPort = 20000
+const peerPort = 20005
+const ringport = 20006
 const UDPPasscode = "svekonrules"
 
-func Monitor(coordinatorCh chan string, incomingCh chan string, outgoingCh chan string) {
+func Monitor(statusCh chan string, incomingCh chan string, outgoingCh chan string) {
 
 	/*
 		The id is either 4th number of the local IPv4, or the PID of the
@@ -34,10 +34,8 @@ func Monitor(coordinatorCh chan string, incomingCh chan string, outgoingCh chan 
 	*/
 	var local Peer
 
-	ringPort := TCPPort
 	if loopBack {
 		local.ID = fmt.Sprintf("%d", os.Getpid())
-		ringPort = os.Getpid()
 	}
 	IP, err := localip.LocalIP()
 	if err != nil {
@@ -49,20 +47,20 @@ func Monitor(coordinatorCh chan string, incomingCh chan string, outgoingCh chan 
 	/* Start monitoring network over UDP */
 	peerUpdateCh := make(chan peers.PeerUpdate)
 	peerTxEnable := make(chan bool)
+
 	bcastMsg := UDPPasscode + "_" + local.ID + "-" + local.IP
 	go peers.Transmitter(peerPort, bcastMsg, subnet, peerTxEnable)
 	go peers.Receiver(peerPort, UDPPasscode, peerUpdateCh)
 
 	/* Ring network */
-	ringNextCh := make(chan string)
-	ringPrevCh := make(chan string)
-	go ring.NextNode(outgoingCh, ringNextCh)
-	go ring.PrevNode(incomingCh, ringPrevCh, ringPort)
+
+	targetCh := make(chan string)
+	go bcast.Transmitter(ringport, targetCh, outgoingCh)
+	go bcast.Receiver(ringport, local.ID, incomingCh)
 
 	fmt.Println("Network module started up PID", local.ID)
 	// every node will send a reply when it has been successfully updated. OK or ERROR.
 
-	var localIndex int
 	var activePeers = make([]Peer, 0, MAX_NUM_PEERS)
 	online := false
 	update := false
@@ -77,38 +75,24 @@ func Monitor(coordinatorCh chan string, incomingCh chan string, outgoingCh chan 
 				activePeers[i] = Peer{newData[0], newData[1]}
 			}
 			update = true
-			time.Sleep(time.Millisecond * 200)
-
-		case nn := <-ringNextCh:
-			if nn == "ERROR" {
-				fmt.Println("NextNode conn test failed")
-				update = true
-			}
 
 		default:
 			if update {
 				if len(activePeers) > 1 {
 					online = true
-					//fmt.Println(activePeers)
-					localIndex = getLocalPeerIndex(local, activePeers)
-					next_i := (localIndex + 1) % len(activePeers)
-					ringPrevCh <- "RESET"
-					/****TEMPORARY*****/
-					ringNextCh <- fmt.Sprintf("%s:%d", activePeers[next_i].IP, ringPort)
-					/******************/
-					if "OK" != <-ringNextCh {
-						fmt.Println("NextNode closed")
-						online = false
-					}
+					i := getLocalPeerIndex(local, activePeers)
+					next_i := (i + 1) % len(activePeers)
+					targetCh <- activePeers[next_i].ID
+
 				} else {
 					online = false
 				}
 				update = false
-				msg := fmt.Sprintf("%t_%d_", online, localIndex)
+				msg := fmt.Sprintf("%t_%s_", online, local.ID)
 				for _, pr := range activePeers {
 					msg = msg + pr.ID + "-"
 				}
-				coordinatorCh <- msg[0:(len(msg) - 1)]
+				statusCh <- msg[0:(len(msg) - 1)]
 			}
 		}
 
