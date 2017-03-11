@@ -11,11 +11,12 @@ import (
 
 // Encodes received values from `chans` into type-tagged JSON, then broadcasts
 // it on `port`
-func Transmitter(port int, chans ...interface{}) {
+func Transmitter(port int, targetCh chan string, chans ...interface{}) {
 	checkArgs(chans...)
+	target := ""
 
 	n := 0
-	for _,_= range(chans) {
+	for _, _ = range chans {
 		n++
 	}
 
@@ -31,16 +32,23 @@ func Transmitter(port int, chans ...interface{}) {
 
 	conn := conn.DialBroadcastUDP(port)
 	addr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", port))
+
+	go func() {
+		for {
+			target = <-targetCh
+		}
+	}()
+
 	for {
 		chosen, value, _ := reflect.Select(selectCases)
 		buf, _ := json.Marshal(value.Interface())
-		conn.WriteTo([]byte(typeNames[chosen]+string(buf)), addr)
+		conn.WriteTo([]byte(target+"@"+typeNames[chosen]+string(buf)), addr)
 	}
 }
 
 // Matches type-tagged JSON received on `port` to element types of `chans`, then
 // sends the decoded value on the corresponding channel
-func Receiver(port int, chans ...interface{}) {
+func Receiver(port int, ID string, chans ...interface{}) {
 	checkArgs(chans...)
 
 	var buf [1024]byte
@@ -50,15 +58,19 @@ func Receiver(port int, chans ...interface{}) {
 		for _, ch := range chans {
 			T := reflect.TypeOf(ch).Elem()
 			typeName := T.String()
-			if strings.HasPrefix(string(buf[0:n])+"{", typeName) {
-				v := reflect.New(T)
-				json.Unmarshal(buf[len(typeName):n], v.Interface())
+			msg := strings.Split(string(buf[0:n]), "@")
 
-				reflect.Select([]reflect.SelectCase{{
-					Dir:  reflect.SelectSend,
-					Chan: reflect.ValueOf(ch),
-					Send: reflect.Indirect(v),
-				}})
+			if msg[0] == ID {
+				if strings.HasPrefix(msg[1]+"{", typeName) {
+					v := reflect.New(T)
+					//buf[len(typeName):n]
+					json.Unmarshal([]byte(msg[1])[len(typeName):], v.Interface())
+					reflect.Select([]reflect.SelectCase{{
+						Dir:  reflect.SelectSend,
+						Chan: reflect.ValueOf(ch),
+						Send: reflect.Indirect(v),
+					}})
+				}
 			}
 		}
 	}
@@ -73,7 +85,7 @@ func Receiver(port int, chans ...interface{}) {
 //    so the tests on element type are hand-copied from `encoding/json/encode.go`
 func checkArgs(chans ...interface{}) {
 	n := 0
-	for _,_ = range(chans) {
+	for _, _ = range chans {
 		n++
 	}
 	elemTypes := make([]reflect.Type, n)

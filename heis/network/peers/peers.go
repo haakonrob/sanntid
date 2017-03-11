@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net"
 	"sort"
-	"time"
 	"strings"
+	"time"
 )
 
 type PeerUpdate struct {
