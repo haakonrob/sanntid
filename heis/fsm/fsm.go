@@ -87,7 +87,7 @@ func Fsm(eventChan chan driver.Event, coordinatorChan chan LocalOrderState) {
 				elevState = IDLE_STATE
 
 				//wait for door to close...
-				time.Sleep(time.Second * 4)
+				//time.Sleep(time.Second * 4)
 				stateTable[elevState][newEvent.Type]()
 			}
 

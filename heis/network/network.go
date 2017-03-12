@@ -4,7 +4,7 @@ import (
 	"./bcast"
 	"./localip"
 	"./peers"
-	"fmt"
+	"fmt"			
 	"os"
 	"strings"
 	_ "time"
@@ -20,7 +20,7 @@ type Peer struct {
 }
 
 const MAX_NUM_PEERS = 10
-const subnet = "localhost" //or localhost
+const subnet = "sanntidsal" //or localhost
 const loopBack = true
 const peerPort = 20005
 const ringport = 20006
