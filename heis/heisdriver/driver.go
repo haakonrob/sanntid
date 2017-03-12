@@ -61,10 +61,10 @@ type Event struct {
 	Val  int
 }
 
-var timer_on bool
+var start_timer bool
 
 func ElevStartTimer() {
-	timer_on = true
+	start_timer = true
 }
 
 func Poller(orders chan Order, events chan Event) {
@@ -73,6 +73,7 @@ func Poller(orders chan Order, events chan Event) {
 	var stopped bool
 	var obstructed bool
 	var timing bool
+	var timestamp time.Time
 
 	for {
 		time.Sleep(time.Millisecond * 200)
@@ -80,7 +81,7 @@ func Poller(orders chan Order, events chan Event) {
 		currFloor := ElevGetFloorSensorSignal()
 		stopButton := ElevGetStopSignal()
 		obstructionSwitch := ElevGetObstructionSignal()
-
+		
 		if currFloor != -1 && !atFloor {
 			atFloor = true
 			events <- Event{FLOOR_EVENT, currFloor}
@@ -103,12 +104,17 @@ func Poller(orders chan Order, events chan Event) {
 			obstructed = false
 			events <- Event{OBSTRUCTION_EVENT, 0}
 		}
-		if !timing && timer_on {
+		if !timing && start_timer {
+			start_timer = false
 			timing = true
 			timestamp = time.Now()
-		} else if timing && time.Since(timestamp) >time.Second*3 {
-			timing, timer_on = false, false
+			
+		} else if timing && (time.Since(timestamp) > time.Second*3) {
+			timing = false 
 			events<- Event{TIMER_EVENT,1}
+
+			
+			
 		}
 		for i := 0; i < N_FLOORS-1; i++ {
 			press := ElevGetButtonSignal(BUTTON_CALL_UP, i)

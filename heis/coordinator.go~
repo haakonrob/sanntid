@@ -75,6 +75,7 @@ func main() {
 	GlobalOrders.Scores = make(map[string][2][N_FLOORS]int)
 
 	orderChan := make(chan heis.Order, 5)
+	completedOrderChan := make(chan fsm.LocalOrderState)
 	eventChan := make(chan heis.Event, 5)
 	fsmChan := make(chan fsm.LocalOrderState)
 
@@ -84,7 +85,7 @@ func main() {
 
 	heis.ElevInit()
 	go heis.Poller(orderChan, eventChan)
-	go fsm.Fsm(eventChan, fsmChan)
+	go fsm.Fsm(eventChan, fsmChan, completedOrderChan)
 	go network.Monitor(networkCh, incomingCh, outgoingCh)
 
 	var changesMade bool
@@ -107,7 +108,7 @@ func main() {
 			err := json.Unmarshal(msg, &GlobalPacketDEC)
 			if err == nil {	
 				GlobalOrders = GlobalPacketDEC
-				//fmt.Println("Good network package", err, GlobalPacketDEC		)
+				//fmt.Println("Good network package", err, GlobalPacketDEC)
 			} else {
 				fmt.Println("Bad network package", err)
 				break
@@ -119,7 +120,7 @@ func main() {
 			case localID:
 				if orderIterate(DOWN, N_FLOORS,takeGlobalOrder) {
 					changesMade = true
-					updateLocalPendingOrders()
+					//updateLocalPendingOrders()
 					GlobalOrders.SenderId = localID
 					fsmChan <- LocalOrders
 
@@ -149,6 +150,7 @@ func main() {
 				} else {
 					fmt.Println("New local order.")
 					_ = addNewLocalOrder(newOrder)
+					fsmChan <- LocalOrders
 				}
 				// fsm will be updated when packet comes around again
 			case false:
@@ -156,11 +158,11 @@ func main() {
 				fsmChan <- LocalOrders
 			}
 			
-		case newLocalOrders := <-fsmChan:
+		case newLocalOrders := <-completedOrderChan:
 			LocalOrders.Completed = newLocalOrders.Completed
 			switch (online) {
 			case true:
-				changesMade = orderIterate(DOWN, N_FLOORS, completeGlobalOrders)
+				changesMade = orderIterate(COMMAND, N_FLOORS, completeGlobalOrders)
 				GlobalOrders.SenderId = localID
 
 			case false:
@@ -169,13 +171,7 @@ func main() {
 			}
 
 		default:
-<<<<<<< HEAD
-=======
 
-			//timeout error handling
-			//if global taken too long
-			//move from taken to avaliable
->>>>>>> 65568956c83e07f082986658ba3de8de9181a24f
 			continue
 		}
 	}
@@ -276,6 +272,7 @@ func globalOrdersAvailable(ordertype heis.ElevButtonType, floor int)(bool){
 func completeLocalOrders(ordertype heis.ElevButtonType, floor int)(bool) {
 	if LocalOrders.Completed[ordertype][floor]{
 		LocalOrders.Pending[ordertype][floor] = false
+		LocalOrders.Completed[o][floor] = false
 		return true
 	}
 	return false
@@ -327,7 +324,12 @@ func setLight(ordertype heis.ElevButtonType, floor int)(bool) {
 func scoreAvailableOrders(ordertype heis.ElevButtonType, floor int)(bool) {
 	if scores, ok := GlobalOrders.Scores[localID]; ok {
 		//fmt.Println("Actually scored")
-		scores[ordertype][floor] = 100 ////INSERT COST FUNC HERE
+		pFloor, dir := LocalOrders.PrevFloor, LocalOrders.Direction
+		floorDiff := (floor - pFloor)	
+		if floorDiff < 0 {floorDiff = -floorDiff}
+		randNum := int(byte(localID[len(localID)-1]))
+		scores[ordertype][floor] = 200-floorDiff + (floor - pFloor)*int(dir)*10 - randNum //COST FUNC
+		fmt.Println(randNum)
 		return true
 	} else {
 		return false
