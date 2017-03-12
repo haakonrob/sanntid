@@ -169,10 +169,6 @@ func main() {
 			}
 
 		default:
-			//timeout error handling
-			//if global taken too long
-			//move from taken to avaliable
-			//
 			continue
 		}
 	}

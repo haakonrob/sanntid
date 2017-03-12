@@ -102,7 +102,7 @@ func main() {
 			fmt.Println(activeElevs)
 			fmt.Println("Online: ", online)
 		case msg := <-incomingCh:
-			fmt.Println("Network pkt ")
+			//fmt.Println("Network pkt ")
 			var GlobalPacketDEC GlobalOrderStruct
 			err := json.Unmarshal(msg, &GlobalPacketDEC)
 			if err == nil {	
@@ -169,10 +169,38 @@ func main() {
 			}
 
 		default:
+<<<<<<< HEAD
+			//***********'timeout error handeling
+			//if global taken too long
+			//move from taken to avaliable
+
+			/*for ordertype := UP; ordertype <= DOWN; ordertype++ {
+				for floor := 0; floor < N_FLOORS; floor++ {
+					if time.Since(GlobalOrders.Timestamps[ordertype][floor]) > time.Second*10 {
+						GlobalOrders.Available[ordertype][floor] = true
+						GlobalOrders.Taken[ordertype][floor] = false
+					}
+
+					if time.Since(LocalOrders.Timestamps[ordertype][floor]) > time.Second*10 {
+						GlobalOrders.Available[ordertype][floor] = true
+						GlobalOrders.Taken[ordertype][floor] = false
+						LocalOrders.Pending[ordertype][floor] = false
+					}
+				}
+			}
+
+			for floor := 0; floor < N_FLOORS; floor++ {
+				if time.Since(LocalOrders.Timestamp[COMMAND][floor]) > time.Second*10 {
+					//handel it by restart of system
+				}
+			}*/
+
+=======
 			//timeout error handling
 			//if global taken too long
 			//move from taken to avaliable
 			//
+>>>>>>> 847147714cba8199c70751b7050d754a28bf28a7
 			continue
 		}
 	}
