@@ -43,7 +43,6 @@ type GlobalOrderStruct struct {
 	Available  [2][N_FLOORS]bool      //'json:"Available"'
 	Taken      [2][N_FLOORS]bool      //'json:"Taken"'
 	Timestamps [2][N_FLOORS]time.Time //'json:"Timestamps"'
-	//Clock             uint                               //'json:"Clock"'
 	Scores            map[string][2][N_FLOORS]int        //[MAX_NUM_ELEVS][2][N_FLOORS]int    //'json:"Scores"'
 	LocalOrdersBackup [MAX_NUM_ELEVS]fsm.LocalOrderState //'json:"LocalOrdersBackup"'
 	SenderId          string
@@ -51,7 +50,6 @@ type GlobalOrderStruct struct {
 
 var (
 	GlobalOrders GlobalOrderStruct
-	//unverified_GlobalOrders GlobalOrderStruct
 	LocalOrders fsm.LocalOrderState
 
 	online      bool
@@ -81,7 +79,6 @@ func main() {
 	for ordertype := UP; ordertype <= DOWN; ordertype++ {
 		for floor := 0; floor < N_FLOORS; floor++ {
 			GlobalOrders.Taken[ordertype][floor] = false
-			//unverified_GlobalOrders.Taken[ordertype][floor] = false
 		}
 	}
 	/************************/
