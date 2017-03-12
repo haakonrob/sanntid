@@ -34,9 +34,9 @@ Timestamps in Taken instead of heisnr?
 const (
 	MAX_NUM_ELEVS = 10
 	N_FLOORS      = heis.N_FLOORS
-	UP            = int(heis.BUTTON_CALL_UP)
-	DOWN          = int(heis.BUTTON_CALL_DOWN)
-	COMMAND       = int(heis.BUTTON_COMMAND)
+	UP            = heis.BUTTON_CALL_UP
+	DOWN          = heis.BUTTON_CALL_DOWN
+	COMMAND       = heis.BUTTON_COMMAND
 )
 
 type GlobalOrderStruct struct {
@@ -108,51 +108,44 @@ func main() {
 				break
 			}
 			
-			mergeOrders()
+			orderIterate(DOWN, N_FLOORS, mergeOrders)
 			
 			switch (GlobalOrders.SenderId) {
 			case localID:
-				if takeGlobalOrders() {
+				if orderIterate(DOWN, N_FLOORS,takeGlobalOrder) {
 					changesMade = true
-					updateLocalOrders()
+					updateLocalPendingOrders()
 				}
 			default:
-				if globalOrdersAvailable(){
-					changesMade = true
-					scoreAvailableOrders()	
+				if orderIterate(DOWN, N_FLOORS, globalOrdersAvailable){
+					changesMade = true 
+					orderIterate(DOWN, N_FLOORS, scoreAvailableOrders)
 				}
 			}
 	
 		case newOrder := <-orderChan:
 			switch (online) {
 			case true && newOrder.OrderType != COMMAND:
-				oldOrders := GlobalOrders
-				addNewGlobalOrder(newOrder)
-				if oldOrders.SenderId = GlobalOrders.SendId; oldOrders == GlobalOrders {
-					changesMade = true
-				}
+				changesMade = addNewGlobalOrder(newOrder)
 				// fsm will be updated when packet comes around again
 			case false || newOrder.OrderType == COMMAND:
-				addNewLocalOrder(newOrder)
+				_ = addNewLocalOrder(newOrder)
 				fsmChan <- LocalOrders
 			}
 			
-		case completedOrders := <-fsmChan:
+		case newLocalOrders := <-fsmChan:
+			LocalOrders.Completed = newLocalOrders.Completed
 			switch (online) {
 			case true:
-				oldOrders := GlobalOrders
-				completeGlobalOrders(completedOrders)
-				if oldOrders.SenderId = GlobalOrders.SendId; oldOrders == GlobalOrders {
-					changesMade = true
-				}
+				changesMade = orderIterate(DOWN, N_FLOORS, completeGlobalOrders)
 
 			case false:
-				completeLocalOrders(completedOrders)
+				orderIterate(COMMAND, N_FLOORS, completeLocalOrders)
 				fsmChan <- LocalOrders
 			}
 
 		default:
-			//timeout error handeling
+			//timeout error handling
 			//if global taken too long
 			//move from taken to avaliable
 			//
@@ -173,12 +166,12 @@ func decodeNetworkStatus(str string) (bool, string, []string) {
 	return online, ID, list
 }
 
-func addNewLocalOrder(order heis.Order) {
+func addNewLocalOrder(order heis.Order)(bool) {
 	ordertype := order.OrderType
 	floor := order.Floor
 	stamp := time.Now()
 	switch ordertype {
-	case UP || DOWN || COMMAND:
+	case UP, DOWN, COMMAND:
 		LocalOrders.Pending[ordertype][floor] = true
 		LocalOrders.Completed[ordertype][floor] = false
 		LocalOrders.Timestamps[ordertype][floor] = stamp
@@ -186,6 +179,7 @@ func addNewLocalOrder(order heis.Order) {
 	default:
 		fmt.Println("Invalid OrderType in addNewLocalOrder()")
 	}
+	return true
 
 }
 
@@ -194,13 +188,13 @@ func updateLocalPendingOrders(){
 	LocalOrders.Pending[DOWN] = GlobalOrders.Taken[DOWN]
 }
 
-func addNewGlobalOrder(order heis.Order) {
+func addNewGlobalOrder(order heis.Order)(bool) {
 	ordertype := order.OrderType
 	floor := order.Floor
 	stamp := time.Now()
 
 	switch ordertype {
-	case ordertype == UP || ordertype == DOWN :
+	case UP, DOWN :
 		GlobalOrders.Available[ordertype][floor] = true
 		GlobalOrders.Taken[ordertype][floor] = false
 		GlobalOrders.Timestamps[ordertype][floor] = stamp
@@ -218,6 +212,7 @@ func addNewGlobalOrder(order heis.Order) {
 	default:
 		fmt.Println("Invalid OrderType in updateglobalorders()")
 	}
+	return true
 
 }
 
@@ -226,35 +221,37 @@ func addNewGlobalOrder(order heis.Order) {
  Functions for handling LocalOrders and GLobalOrders
 *****************************************************/
 
-type orderLogic func(int, int)(bool)
+type orderLogic func(heis.ElevButtonType, int)(bool)
 
 //Iterates over specified intevals with a function, 
 //returns true if a single iteration resulted in true
-func orderIterate( oEnd int, fEnd int, orderFun orderLogic ){
+func orderIterate( oEnd heis.ElevButtonType, fEnd int, orderFun orderLogic )(bool){
 	result := false
 	for o := UP; o <= oEnd; o++ {
-		for floor := 0; floor < fEnd; floor++ {
-			if orderFun(){
+		for f := 0; f < fEnd; f++ {
+			if orderFun(o,f){
 				result = true
 			}
 		}
 	}
 	return result		
-}
+} 
 
-func globalOrdersAvailable(ordertype int, floor int){
-	if GlobalOrders[order][floor]{
+func globalOrdersAvailable(ordertype heis.ElevButtonType, floor int)(bool){
+	if GlobalOrders.Available[ordertype][floor]{
 		return true
 	}
 	return false
 }
 
 //3 x N_FLOORS
-func completeLocalOrders(ordertype int, floor int) {
+func completeLocalOrders(ordertype heis.ElevButtonType, floor int)(bool) {
 	if LocalOrders.Completed[ordertype][floor]{
 		LocalOrders.Pending[ordertype][floor] = false
+		return true
 	}
-	return true
+	return false
+	
 	/*
 	for o := UP; o <= COMMAND; o++ {
 		for floor := 0; floor < N_FLOORS; floor++ {
@@ -267,37 +264,42 @@ func completeLocalOrders(ordertype int, floor int) {
 
 
 // 3 x N_FLOORS
-func completeGlobalOrders(o int, floor int)(true) {
-	pending := newlocalOrders.Pending[ordertype][floor]
-	completed := newlocalOrders.Completed[ordertype][floor]
+func completeGlobalOrders(o heis.ElevButtonType, floor int)(bool) {
+	completed := LocalOrders.Completed
 
-	if completed {
-		switch ordertype {
-		case UP || DOWN:
-			GlobalOrders.Available[o][floor] == false
-			GlobalOrders.Taken[o][floor] == false
-			LocalOrders.Pending[o][floor] == false
-			LocalOrders.Completed[o][floor] == false
+	if completed[o][floor]{
+		switch o {
+		case UP, DOWN:
+			GlobalOrders.Available[o][floor] = false
+			GlobalOrders.Taken[o][floor] = false
+			LocalOrders.Pending[o][floor] = false
+			LocalOrders.Completed[o][floor] = false
+			return true
 		
 		case COMMAND :
-			LocalOrders.Pending[o][floor] == false
-			LocalOrders.Completed[o][floor] == false
+			
+				LocalOrders.Pending[o][floor] = false
+				LocalOrders.Completed[o][floor] = false
+				return true
+			}
+
 		default:
 			fmt.Println("Bad ordertype in completeGlobalOrders()")
 		}	
 	}
-	return true
+	return false
+	
 }
 
 /*************************************************/
 
 //3 x N_FLOORS
-func setLight(ordertype int, floor int) {
+func setLight(ordertype heis.ElevButtonType, floor int)(bool) {
 	switch ordertype {
-	case ordertype == COMMAND:
+	case COMMAND:
 		val := LocalOrders.Pending[ordertype][floor]
 		heis.ElevSetButtonLamp(ordertype, floor, val)
-	case ordertype == UP || ordertype == DOWN:
+	case UP, DOWN:
 		val := GlobalOrders.Available[ordertype][floor] || GlobalOrders.Taken[ordertype][floor]
 		heis.ElevSetButtonLamp(ordertype, floor, val)
 	}
@@ -305,7 +307,7 @@ func setLight(ordertype int, floor int) {
 
 }
 //2 x N_FLOORS
-func scoreAvailableOrders(ordertype int, floor int) {
+func scoreAvailableOrders(ordertype heis.ElevButtonType, floor int)(bool) {
 	if scores, ok := GlobalOrders.Scores[localID]; ok {
 		scores[ordertype][floor] = 10 ////INSERT COST FUNC HERE
 		return true
@@ -315,7 +317,7 @@ func scoreAvailableOrders(ordertype int, floor int) {
 }
 
 // 2 x N_FLOORS
-func isBestScore(ordertype int, floor int) bool {
+func isBestScore(ordertype heis.ElevButtonType, floor int) (bool) {
 	// returns false if it finds a better competitor, else returns true.
 
 	for _, elevID := range activeElevs {
@@ -331,7 +333,8 @@ func isBestScore(ordertype int, floor int) bool {
 	return true
 }
 
-func takeGlobalOrders(ordertype int, floor int) {
+//2 x N_FLOORS
+func takeGlobalOrder(ordertype heis.ElevButtonType, floor int)(bool) {
 	changesMade := false
 	if isBestScore(ordertype, floor) && GlobalOrders.Available[ordertype][floor] {
 		GlobalOrders.Available[ordertype][floor] = false
@@ -348,12 +351,14 @@ func takeGlobalOrders(ordertype int, floor int) {
 }
 
 //2 x N_FLOORS
-func mergeOrders(ordertype int, floor int) {
+func mergeOrders(ordertype heis.ElevButtonType, floor int)(bool) {
 	// If an order is listed as taken, but this elev has completed it, the order is removed from globalorders
 	if GlobalOrders.Taken[ordertype][floor] && LocalOrders.Completed[ordertype][floor] {
 		GlobalOrders.Taken[ordertype][floor] = false
 		LocalOrders.Completed[ordertype][floor] = false
+		return true
 	}
+	return false
 }
 
 /*******TEST DECODING ENCODING PACKET*********
