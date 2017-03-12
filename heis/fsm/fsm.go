@@ -17,6 +17,7 @@ const (
 	UP         = driver.BUTTON_CALL_UP
 	DOWN       = driver.BUTTON_CALL_DOWN
 	COMMAND    = driver.BUTTON_COMMAND
+	NONE       = -1
 )
 
 type State int
@@ -44,31 +45,26 @@ type stateTransition func()
 
 var stateTable = [4][4]stateTransition{
 	//	NOTHING 		FLOOR_EVENT 	STOP_EVENT  	OBSTRUCT_EVENT
-	{next_order, 		null, 			EM_stop, 		null}, /*IDLE_STATE*/
-	{null, 				null, 			end_EM_stop, 	null},   /*STOPPED_CLOSED_STATE*/
-	{null, 				null, 			EM_stop, 		null},       /*STOPPED_OPEN_STATE*/
-	{null,				newFloor, 		EM_stop, 		null}}   /*MOVING_STATE*/
+	{next_order, null, EM_stop, null}, /*IDLE_STATE*/
+	{null, null, end_EM_stop, null},   /*STOPPED_CLOSED_STATE*/
+	{null, null, EM_stop, null},       /*STOPPED_OPEN_STATE*/
+	{null, newFloor, EM_stop, null}}   /*MOVING_STATE*/
 
 var elevState State
 var orders LocalOrderState
 var newEvent driver.Event
 var updateFlag bool
-var destinationOrder driver.Event
-
-
-
+var destinationOrder driver.Order
 
 func Fsm(eventChan chan driver.Event, coordinatorChan chan LocalOrderState) {
 
-
 	fsmInit()
-	destinationOrder = nil
+	destinationOrder.Floor = NONE
 
 	doorTimerChanReset := make(chan bool)
 	doorTimerChanDone := make(chan bool)
 
 	go doorTimer(doorTimerChanDone, doorTimerChanReset)
-	
 
 	for {
 		select {
@@ -118,23 +114,22 @@ func next_order() {
 
 	var nextOrder driver.Order
 
-	if destinationOrder == nil{
-Loop:
-	for ordertype := COMMAND; ordertype >= UP; ordertype-- {
-		for floor := 0; floor < NUM_FLOORS; floor++ {
-			if pending[ordertype][floosr] && !completed[ordertype][floor] {
-				nextOrder = driver.Order{ordertype, floor}
-				foundOrder = true
-				destinationOrder = nextOrder
-				break Loop
+	if destinationOrder.Floor == NONE {
+	Loop:
+		for ordertype := COMMAND; ordertype >= UP; ordertype-- {
+			for floor := 0; floor < NUM_FLOORS; floor++ {
+				if pending[ordertype][floor] && !completed[ordertype][floor] {
+					nextOrder = driver.Order{ordertype, floor}
+					foundOrder = true
+					destinationOrder = nextOrder
+					break Loop
+				}
 			}
 		}
-	}
-	}else{
+	} else {
 		foundOrder = true
 		nextOrder = destinationOrder
 	}
-
 
 	if foundOrder {
 		if nextOrder.Floor == orders.PrevFloor {
@@ -154,7 +149,7 @@ Loop:
 }
 
 func complete_order(floor int) {
-	
+
 	elevState = STOPPED_OPEN_STATE
 
 	for ordertype := COMMAND; ordertype >= UP; ordertype-- {
@@ -172,7 +167,7 @@ func complete_order(floor int) {
 	//fmt.Println("complete_order:", orders.Completed)
 	//fmt.Println("opening doors")
 
-	doorTimerChanReset<-true
+	doorTimerChanReset <- true
 }
 
 /****Prefereably replace with event******/
@@ -194,12 +189,12 @@ func newFloor() {
 	orders.PrevFloor = newEvent.Val
 	floor := orders.PrevFloor
 	driver.ElevSetFloorIndicator(floor)
-	
-	if destinationOrder != nil{
-		if ShouldStopOnFloor(floor) && destinationOrder.floor != floor{
+
+	if destinationOrder.Floor != NONE {
+		if ShouldStopOnFloor(floor) && destinationOrder.Floor != floor {
 			complete_order(floor)
-		}else if destinationOrder.floor == floor{
-			destinationOrder = nil
+		} else if destinationOrder.Floor == floor {
+			destinationOrder.Floor = NONE
 			complete_order(floor)
 		}
 	}
@@ -221,7 +216,6 @@ func end_EM_stop() {
 	}
 }
 
-
 /*****Consider moving to driver.go*******/
 
 func elev_stop() {
@@ -232,39 +226,34 @@ func elev_stop() {
 func elev_move_up() {
 	driver.ElevSetMotorDirection(driver.DIRN_UP)
 	orders.Direction = driver.DIRN_UP
-
 }
 
 func elev_move_down() {
 	driver.ElevSetMotorDirection(driver.DIRN_DOWN)
 	orders.Direction = driver.DIRN_DOWN
-
 }
 
-
-func ShouldStopOnFloor(floor int)bool{
-
+func ShouldStopOnFloor(floor int) bool {
 	pending := orders.Pending
 	completed := orders.Completed
 	dir := orders.Direction
 
-
 	switch dir {
-	case DIRN_DOWN:
-		if (pending[driver.BUTTON_CALL_DOWN][floor] && !completed[driver.BUTTON_CALL_DOWN][floor]){
-			return = true
+	case driver.DIRN_DOWN:
+		if pending[driver.BUTTON_CALL_DOWN][floor] && !completed[driver.BUTTON_CALL_DOWN][floor] {
+			return true
 		}
-	case DIRN_UP:
-		if (pending[driver.BUTTON_CALL_UP][floor] && !completed[driver.BUTTON_CALL_UP][floor]){
-			return = true
+	case driver.DIRN_UP:
+		if pending[driver.BUTTON_CALL_UP][floor] && !completed[driver.BUTTON_CALL_UP][floor] {
+			return true
 		}
-	case DIRN_STOP:
+	case driver.DIRN_STOP:
 		return true
 	default:
 		fmt.Println("ERROR in ShouldStopOnFloor()")
 	}
+	return false
 }
-
 
 func doorTimer(timeout chan<- bool, reset <-chan bool) {
 	const doorOpenTime = 3 * time.Second
@@ -283,7 +272,6 @@ func doorTimer(timeout chan<- bool, reset <-chan bool) {
 	}
 }
 
-
 /****************************************/
 
 func fsmInit() {
@@ -297,9 +285,4 @@ func fsmInit() {
 	updateFlag = false
 	newEvent = driver.Event{driver.NOTHING, 0}
 
-	
 }
-
-
-
-
