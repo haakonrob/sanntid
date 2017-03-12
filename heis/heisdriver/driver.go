@@ -140,18 +140,14 @@ func ElevSetMotorDirection(dirn ElevMotorDirection) {
 	}
 }
 
-func ElevSetButtonLamp(button int, floor int, value int) {
-
+func ElevSetButtonLamp(button ElevButtonType, floor int, on bool) {
 	if button > N_BUTTONS || button < 0 || floor < 0 || floor > N_FLOORS {
 		fmt.Println("ERROR set lamp.driver")
 	}
 
-	//fmt.Println("Button: ", button, "Floor: ", floor, "Value: ", value)
-
-	if value != 0 {
+	if on {
 		IoSetBit(lampChannelMatrix[floor][button])
 	} else {
-		//fmt.Println("turnoff")
 		IoClearBit(lampChannelMatrix[floor][button])
 	}
 }
@@ -230,8 +226,8 @@ func ElevInit() {
 	}
 
 	for f := 0; f < N_FLOORS; f++ {
-		for b := 0; b < N_BUTTONS; b++ {
-			ElevSetButtonLamp(b, f, 0)
+		for b := BUTTON_CALL_UP; b < N_BUTTONS; b++ {
+			ElevSetButtonLamp(b, f, false)
 		}
 	}
 
