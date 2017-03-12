@@ -4,6 +4,8 @@ import (
 	driver "../heisdriver" //"../simulator/client"
 	"fmt"
 	"time"
+	"os"
+	"os/signal"
 )
 
 /******************************************
@@ -206,11 +208,13 @@ func ShouldStopOnFloor(floor int) bool {
 
 	switch dir {
 	case driver.DIRN_DOWN:
-		if pending[driver.BUTTON_CALL_DOWN][floor] && !completed[driver.BUTTON_CALL_DOWN][floor] {
+		shouldStop := pending[driver.BUTTON_CALL_DOWN][floor] || pending[driver.BUTTON_COMMAND][floor]
+		if shouldStop && !completed[driver.BUTTON_CALL_DOWN][floor] {
 			return true
 		}
 	case driver.DIRN_UP:
-		if pending[driver.BUTTON_CALL_UP][floor] && !completed[driver.BUTTON_CALL_UP][floor] {
+		shouldStop := pending[driver.BUTTON_CALL_UP][floor] || pending[driver.BUTTON_COMMAND][floor]
+		if shouldStop && !completed[driver.BUTTON_CALL_UP][floor] {
 			return true
 		}
 	case driver.DIRN_STOP:

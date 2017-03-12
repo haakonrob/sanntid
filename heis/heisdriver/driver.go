@@ -8,7 +8,7 @@ import (
 
 const N_FLOORS = 4
 const N_BUTTONS = 3
-const MOTOR_SPEED = 2800
+const MOTOR_SPEED = 3800
 
 var lampChannelMatrix = [N_FLOORS][N_BUTTONS]int{
 	{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
@@ -76,8 +76,6 @@ func Poller(orders chan Order, events chan Event) {
 	var timestamp time.Time
 
 	for {
-		time.Sleep(time.Millisecond * 200)
-
 		currFloor := ElevGetFloorSensorSignal()
 		stopButton := ElevGetStopSignal()
 		obstructionSwitch := ElevGetObstructionSignal()
@@ -109,7 +107,7 @@ func Poller(orders chan Order, events chan Event) {
 			timing = true
 			timestamp = time.Now()
 			
-		} else if timing && (time.Since(timestamp) > time.Second*3) {
+		} else if timing && (time.Since(timestamp) > time.Second*2) {
 			timing = false 
 			events<- Event{TIMER_EVENT,1}
 
