@@ -182,10 +182,9 @@ func main() {
 				//send msg*/
 
 		default:
-			//timeout error handeling
+			//***********'timeout error handeling
 			//if global taken too long
 			//move from taken to avaliable
-			//
 
 			/*for ordertype := UP; ordertype <= DOWN; ordertype++ {
 				for floor := 0; floor < N_FLOORS; floor++ {
