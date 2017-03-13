@@ -1,10 +1,10 @@
 package network
 
 import (
-	"./ring"
 	"./localip"
 	"./peers"
-	"fmt"			
+	"./ring"
+	"fmt"
 	"os"
 	"strings"
 	_ "time"
@@ -20,8 +20,9 @@ type Peer struct {
 }
 
 const MAX_NUM_PEERS = 10
+
 //const subnet = "sanntidsal" //or localhost
-const UDPPasscode = "svekonrules"
+const UDPPasscode = "svekonrulesss"
 const peerPort = 20005
 
 var ringport = 20006
@@ -53,7 +54,7 @@ func Monitor(statusCh chan string, loopBack bool, subnet string, incomingCh chan
 	peerUpdateCh := make(chan peers.PeerUpdate)
 	peerTxEnable := make(chan bool)
 
-	bcastMsg := fmt.Sprintf("%s_%s-%s:%d",UDPPasscode,local.ID, local.IP, ringport)
+	bcastMsg := fmt.Sprintf("%s_%s-%s:%d", UDPPasscode, local.ID, local.IP, ringport)
 	go peers.Transmitter(peerPort, bcastMsg, subnet, peerTxEnable)
 	go peers.Receiver(peerPort, UDPPasscode, peerUpdateCh)
 
@@ -62,7 +63,7 @@ func Monitor(statusCh chan string, loopBack bool, subnet string, incomingCh chan
 	go ring.Transmitter(targetCh, outgoingCh)
 	go ring.Receiver(ringport, incomingCh)
 
-	fmt.Println("Network module started up PID", local.ID)
+	fmt.Println("Network module started up. PID:", local.ID, ", IP: ", local.IP)
 	// every node will send a reply when it has been successfully updated. OK or ERROR.
 
 	var activePeers = make([]Peer, 0, MAX_NUM_PEERS)
@@ -71,8 +72,9 @@ func Monitor(statusCh chan string, loopBack bool, subnet string, incomingCh chan
 
 	for {
 		select {
-			
+
 		case p := <-peerUpdateCh:
+
 			activePeers = make([]Peer, len(p.Peers), MAX_NUM_PEERS)
 			for i, pr := range p.Peers {
 				newData := strings.Split(pr, "-")
@@ -87,29 +89,31 @@ func Monitor(statusCh chan string, loopBack bool, subnet string, incomingCh chan
 					online = true
 					i := getLocalPeerIndex(local, activePeers)
 					next_i := (i + 1) % len(activePeers)
-					targetCh <- fmt.Sprintf("%s:%d", activePeers[next_i].IP, ringport)
-
+					nextTarget := activePeers[next_i].IP
+					targetCh <- nextTarget
 				} else {
 					online = false
 				}
 				msg := fmt.Sprintf("%t_%s_", online, local.ID)
+				fmt.Printf(msg)
 				for _, pr := range activePeers {
 					msg = msg + pr.ID + "-"
 				}
-				statusCh <- msg[0:(len(msg))-1]
+				statusCh <- msg[0 : (len(msg))-1]
 			}
 		}
 
 	}
 }
 
-func getLocalPeerIndex(ID Peer, list []Peer) int {
+func getLocalPeerIndex(p Peer, list []Peer) int {
 	i := 0
 	for i < len(list) {
-		if ID == list[i] {
-			break
+		if p.ID == list[i].ID {
+			return i
 		}
 		i++
 	}
+	fmt.Println("My ID isn't in the list.")
 	return i
 }

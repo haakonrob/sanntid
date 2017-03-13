@@ -3,9 +3,9 @@ package main
 import (
 	"./network"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
-	"runtime"
 )
 
 func main() {
@@ -19,17 +19,17 @@ func main() {
 	var timestamp = time.Now()
 	activeElevs := make([]string, 0, 10)
 
-	go network.Monitor(networkCh, true, "localhost", incomingCh, outgoingCh)
+	go network.Monitor(networkCh, true, "sanntidsal", incomingCh, outgoingCh)
 	for {
 		select {
 		case msg := <-networkCh:
 			online, localID, activeElevs = decodeNetworkStatus(msg)
 			fmt.Println("Net status: ", online, localID, activeElevs)
 			/*
-			if activeElevs[0] == localID {
-				fmt.Println("Got here")
-				outgoingCh <- "hello"
-			}*/
+				if activeElevs[0] == localID {
+					fmt.Println("Got here")
+					outgoingCh <- "hello"
+				}*/
 
 		case msg := <-incomingCh:
 			fmt.Println("Received: ", msg)
