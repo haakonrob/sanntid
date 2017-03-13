@@ -15,7 +15,7 @@ func main() {
     chrx := make(chan string)
     updateCh := make(chan string)
     go Receiver(20000, chrx)
-    go Transmitter(20000, updateCh, chtx)
+    go Transmitter(updateCh, chtx)
     updateCh<-"me"
     for {
     }
@@ -23,7 +23,7 @@ func main() {
 
 // Encodes received values from `chans` into type-tagged JSON, then broadcasts
 // it on `port`
-func Transmitter(port int, targetCh chan string, chans ...interface{}) {
+func Transmitter(targetCh chan string, chans ...interface{}) {
 	checkArgs(chans...)
 
 	n := 0
