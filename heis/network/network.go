@@ -21,12 +21,12 @@ type Peer struct {
 
 const MAX_NUM_PEERS = 10
 const subnet = "sanntidsal" //or localhost
-const loopBack = true
+const loopBack = false
 const peerPort = 20005
 const ringport = 20006
 const UDPPasscode = "svekonrules"
 
-func Monitor(statusCh chan string, incomingCh chan []byte, outgoingCh chan []byte) {
+func Monitor(statusCh chan string, bcastEN chan bool, incomingCh chan []byte, outgoingCh chan []byte) {
 
 	/*
 		The id is either 4th number of the local IPv4, or the PID of the
@@ -34,15 +34,18 @@ func Monitor(statusCh chan string, incomingCh chan []byte, outgoingCh chan []byt
 	*/
 	var local Peer
 
-	if loopBack {
-		local.ID = fmt.Sprintf("%d", os.Getpid())
-	}
 	IP, err := localip.LocalIP()
 	if err != nil {
 		fmt.Println(err)
 		IP = "DISCONNECTED"
 	}
 	local.IP = IP
+
+	if loopBack {
+		local.ID = fmt.Sprintf("%d", os.Getpid())
+	} else {
+		local.ID = strings.Split(IP, ".")[3]
+	}
 
 	/* Start monitoring network over UDP */
 	peerUpdateCh := make(chan peers.PeerUpdate)
@@ -67,7 +70,16 @@ func Monitor(statusCh chan string, incomingCh chan []byte, outgoingCh chan []byt
 
 	for {
 		select {
-
+		case EN := <-bcastEN:
+			peerTxEnable<- EN
+			for !EN {
+				msg := fmt.Sprintf("%t_%s_", false, local.ID)
+				statusCh<- msg
+				EN = <-bcastEN
+				peerTxEnable<- EN
+			}
+			
+			
 		case p := <-peerUpdateCh:
 			activePeers = make([]Peer, len(p.Peers), MAX_NUM_PEERS)
 			for i, pr := range p.Peers {

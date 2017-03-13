@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"os"
+	"os/exec"
 	"io/ioutil"
 )
 
@@ -68,13 +69,14 @@ func main() {
 	fsmChan := make(chan fsm.LocalOrderState)
 
 	networkCh := make(chan string)
+	bcastEN := make(chan bool)
 	incomingCh := make(chan []byte)
 	outgoingCh := make(chan []byte)
 	
 
 	heis.ElevInit()
 	go fsm.Fsm(eventChan, fsmChan, completedOrderChan)
-	go network.Monitor(networkCh, incomingCh, outgoingCh)
+	go network.Monitor(networkCh, bcastEN, incomingCh, outgoingCh)
 	go heis.Poller(orderChan, eventChan)
 
 	if len(os.Args)>1 {
@@ -108,6 +110,7 @@ func main() {
 			online, localID, activeElevs = decodeNetworkStatus(status)
 			fmt.Println(activeElevs)
 			fmt.Println("Online: ", online)
+
 		case msg := <-incomingCh:
 			//fmt.Println("Network pkt ")
 			var GlobalPacketDEC GlobalOrderStruct
@@ -121,6 +124,7 @@ func main() {
 			}
 			
 			orderIterate(DOWN, N_FLOORS, mergeOrders)
+			GlobalOrders.Available = GlobalPacketDEC.Available
 			
 			switch (GlobalOrders.SenderId) {
 			case localID:
@@ -136,14 +140,10 @@ func main() {
 					fmt.Println("None to take: ", GlobalOrders.Taken)
 				}
 			default:
-				if orderIterate(DOWN, N_FLOORS, globalOrdersAvailable){
-					changesMade = true 
-					orderIterate(DOWN, N_FLOORS, scoreAvailableOrder)
+					changesMade = orderIterate(DOWN, N_FLOORS, scoreAvailableOrder)
 					//fmt.Println("Scored")
-				} else {
 					//fmt.Println("No Orders available")
 					fmt.Println(GlobalOrders.Taken)
-				}
 			}
 	
 		case newOrder := <-orderChan:
@@ -182,11 +182,15 @@ func main() {
 			}
 
 		default:
+			if orderIterate(COMMAND, N_FLOORS, isLocalTimeout){
+				bcastEN<- false
 
-			_ = orderIterate(COMMAND, N_FLOORS, isLocalTimeout)
-			changeMade = orderIterate(DOWN, N_FLOORS, isGlobalTimeout)
-			
-			continue
+				fmt.Println("Local timeout, unknown error.")
+				backup := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run coordinator.go ./backupdata")
+				backup.Run()
+				os.Exit(0)
+			}
+			changesMade = orderIterate(DOWN, N_FLOORS, isGlobalTimeout)
 		}
 	}
 }
@@ -341,7 +345,7 @@ func setLights(ordertype heis.ElevButtonType, floor int)(bool) {
 		val = LocalOrders.Pending[ordertype][floor]
 	case UP, DOWN:
 		if online {
-			val = GlobalOrders.Available[ordertype][floor] || GlobalOrders.Taken[ordertype][floor]
+			val = GlobalOrders.Taken[ordertype][floor]
 		} else {
 			val = LocalOrders.Pending[ordertype][floor]
 		}
@@ -351,23 +355,24 @@ func setLights(ordertype heis.ElevButtonType, floor int)(bool) {
 	}
 	heis.ElevSetButtonLamp(ordertype, floor, val)
 	return true
-
 }
+
 //2 x N_FLOORS
 func scoreAvailableOrder(ordertype heis.ElevButtonType, floor int)(bool) {
 	if scores, ok := GlobalOrders.Scores[localID]; ok {
-		//fmt.Println("Actually scored")
-		pFloor, dir := LocalOrders.PrevFloor, LocalOrders.Direction
-		floorDiff := (floor - pFloor)	
-		if floorDiff < 0 {floorDiff = -floorDiff}
-		randNum := int(byte(localID[len(localID)-1]))
-		scores[ordertype][floor] = 200-floorDiff + (floor - pFloor)*int(dir)*10 - randNum //COST FUNC
-		GlobalOrders.Scores[localID] = scores
-		//fmt.Println(randNum)
-		return true
-	} else {
-		return false
+		if GlobalOrders.Available[ordertype][floor] {
+			//fmt.Println("Actually scored")
+			pFloor, dir := LocalOrders.PrevFloor, LocalOrders.Direction
+			floorDiff := (floor - pFloor)	
+			if floorDiff < 0 {floorDiff = -floorDiff}
+			//randNum := int(byte(localID[len(localID)-1]))
+			scores[ordertype][floor] = 200-floorDiff + (floor - pFloor)*int(dir)*10 //COST FUNC
+			GlobalOrders.Scores[localID] = scores
+			fmt.Println("Available score ", scores[ordertype][floor], scores)
+			return true
+		}
 	}
+	return false
 }
 
 // 2 x N_FLOORS
@@ -391,6 +396,7 @@ func isBestScore(ordertype heis.ElevButtonType, floor int) (bool) {
 func takeGlobalOrder(ordertype heis.ElevButtonType, floor int)(bool) {
 	changesMade := false
 	if isBestScore(ordertype, floor) && GlobalOrders.Available[ordertype][floor] {
+		fmt.Println("Taking an order")
 		GlobalOrders.Available[ordertype][floor] = false
 		GlobalOrders.Taken[ordertype][floor] = true
 		GlobalOrders.Timestamps[ordertype][floor] = time.Now()
@@ -441,43 +447,39 @@ func DecodeGlobalPacket(JsonPacket []byte) (PacketDEC GlobalOrderStruct, err err
 
 
 func isLocalTimeout(ordertype heis.ElevButtonType, floor int)bool{
-	if time.Since(LocalOrders.Timestamps[ordertype][floor]) > time.Time(time.Second*10){
-		switch online{
-		case true:
-			online = false
-			LocalOrders.Pending[ordertype][floor] = false
-			LocalOrders.Timestamps = time.Time{}
-			//save COMMANDS 
-			//restart
-		case false:
-			//save local state
-			//restart
+	if LocalOrders.Pending[ordertype][floor] {
+		if time.Since(LocalOrders.Timestamps[ordertype][floor]) > time.Second*10 {
+			if online {
+				LocalOrders.Pending[ordertype][floor] = false			
+			}
+			LocalOrders.Timestamps[ordertype][floor] = time.Now()
+			data, _ := json.Marshal(LocalOrders)
+			_ = ioutil.WriteFile("./backupdata", data, 0644)
+			return true
 		}
-		return true
-
 	}
 	return false
 }
 
 func isGlobalTimeout(ordertype heis.ElevButtonType, floor int)bool{
-	copyOrder := driver.Order
-	if time.Since(GlobalOrders.Timestamps[ordertype][floor] > time.Time(time.Second*10)){
-		select online{
-		case true:
-			GlobalOrders.Taken[ordertype][floor] = false
-			GlobalOrders.Timestamps = time.Time{}
+	copyOrder := heis.Order{ordertype, floor}
+	if GlobalOrders.Taken[ordertype][floor] {
+		if (time.Since(GlobalOrders.Timestamps[ordertype][floor]) > time.Second*10) {
+			switch online {
+			case true:
+				GlobalOrders.Taken[ordertype][floor] = false
+				GlobalOrders.Timestamps[ordertype][floor] = time.Now()
 
-			copyOrder.Val = floor
-			copyOrder.OrderType = ordertype
+				copyOrder.Floor = floor
+				copyOrder.OrderType = ordertype
 
-			addNewGlobalOrder(copyOrder)
+				addNewGlobalOrder(copyOrder)
+			case false:
+				//dontcare
+
+			}
 			return true 
-		case false:
-			//dontcare
-			return true
-
 		}
-		return true 
 	}
 	return false
 }

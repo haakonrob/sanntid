@@ -12,7 +12,7 @@ import (
 
 const N_FLOORS = 4
 const N_BUTTONS = 3
-const MOTOR_SPEED = 3800
+const MOTOR_SPEED = 3000
 
 var lampChannelMatrix = [N_FLOORS][N_BUTTONS]int{
 	{LIGHT_UP1, LIGHT_DOWN1, LIGHT_COMMAND1},
