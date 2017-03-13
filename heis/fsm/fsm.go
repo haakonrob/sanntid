@@ -4,10 +4,6 @@ import (
 	driver "../heisdriver" //"../simulator/client"
 	"fmt"
 	"time"
-	"os"
-	"os/signal"
-	"os/exec"
-	"syscall"
 )
 
 /******************************************
@@ -231,24 +227,10 @@ func ShouldStopOnFloor(floor int) bool {
 
 func fsmInit() {
 	// call getFloorSensor(), if undefined, move to a floor
-	elevMoveUp()
-	for driver.ElevGetFloorSensorSignal() == -1 {
-	}
-	elevStop()
+	driver.ElevSetMotorDirection(driver.DIRN_UP)
+	for driver.ElevGetFloorSensorSignal() == -1 {}
+	driver.ElevSetMotorDirection(driver.DIRN_STOP)
 	orders.PrevFloor = driver.ElevGetFloorSensorSignal()
 	elevState = IDLE_STATE
-	newEvent = driver.Event{driver.NOTHING, 0}
-
-	sigs := make(chan os.Signal)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	go func (){
-		<-sigs
-		fmt.Println("\nTermination signal received. Killing motor.")
-		elevStop()
-		/*
-		backup := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run backup.go")
-		backup.Run()*/
-		os.Exit(0)
-	}()
+	newEvent = driver.Event{driver.NOTHING, 0}	
 }

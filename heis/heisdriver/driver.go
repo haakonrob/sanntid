@@ -4,6 +4,10 @@ import (
 	_ "errors"
 	"fmt"
 	"time"
+	"os"
+	"os/signal"
+	"syscall"
+	"os/exec"
 )
 
 const N_FLOORS = 4
@@ -253,5 +257,19 @@ func ElevInit() {
 	ElevSetDoorOpenLamp(false)
 	ElevSetFloorIndicator(0x00)
 	ElevSetMotorDirection(DIRN_STOP)
+
+	sigs := make(chan os.Signal)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+
+	go func (){
+		<-sigs
+		fmt.Println("\nTermination signal received. Killing motor.")
+		for ElevGetFloorSensorSignal() == -1 {}
+		ElevSetMotorDirection(DIRN_STOP)
+		
+		backup := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run coordinator.go ./backupdata")
+		backup.Run()
+		os.Exit(0)
+	}()
 
 }

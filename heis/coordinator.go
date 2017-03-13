@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	//"os/exec"
+	"os"
+	"io/ioutil"
 )
 
 /******************************************
@@ -20,8 +21,6 @@ Data logging for backup in case of crash/termination
 DISCUSS
 Timestamps in Taken instead of heisnr?
 ******************************************/
-
-//elevtype heis.ElevType = heis.ET_Simulation
 
 const (
 	MAX_NUM_ELEVS = 10
@@ -37,19 +36,16 @@ type GlobalOrderStruct struct {
 	Taken      	[2][N_FLOORS]bool      //'json:"Taken"'
 	Timestamps 	[2][N_FLOORS]time.Time //'json:"Timestamps"'
 	Scores            map[string][2][N_FLOORS]int        //[MAX_NUM_ELEVS][2][N_FLOORS]int    //'json:"Scores"'
-	//LocalOrdersBackup [MAX_NUM_ELEVS]fsm.LocalOrderState //'json:"LocalOrdersBackup"'
 	
 } //
 
 var (
 	GlobalOrders GlobalOrderStruct
 	LocalOrders fsm.LocalOrderState
-
 	online      bool
 	localID     string
 	activeElevs []string
-
-	orderTimestamp int
+	changesMade bool
 )
 
 /*********************************
@@ -62,7 +58,7 @@ Main
 *********************************/
 
 func main() {
-
+	
 	activeElevs = make([]string, 0, MAX_NUM_ELEVS)
 	GlobalOrders.Scores = make(map[string][2][N_FLOORS]int)
 
@@ -71,21 +67,35 @@ func main() {
 	eventChan := make(chan heis.Event, 5)
 	fsmChan := make(chan fsm.LocalOrderState)
 
+	networkCh := make(chan string)
 	incomingCh := make(chan []byte)
 	outgoingCh := make(chan []byte)
-	networkCh := make(chan string)
+	
 
 	heis.ElevInit()
-	go heis.Poller(orderChan, eventChan)
 	go fsm.Fsm(eventChan, fsmChan, completedOrderChan)
 	go network.Monitor(networkCh, incomingCh, outgoingCh)
+	go heis.Poller(orderChan, eventChan)
 
-	var changesMade bool
+	if len(os.Args)>1 {
+		backupFilePath := os.Args[1]
+		data, _ := ioutil.ReadFile(backupFilePath)
+		temp := LocalOrders
+		err := json.Unmarshal(data, &temp)
+		if (err == nil){
+			LocalOrders = temp
+			changesMade = true
+			fsmChan<- LocalOrders
+		}
+	} 
+	
+	
 	for {
 		if (changesMade) {
 			changesMade = false
 			orderIterate(COMMAND, N_FLOORS, setLights)
-			// backup
+			data, _ := json.Marshal(LocalOrders)
+			_ = ioutil.WriteFile("./backupdata", data, 0644)
 			if online {
 				for i:=0;i<1;i++ {
 					outgoingCh <- EncodeGlobalPacket()
@@ -172,7 +182,6 @@ func main() {
 			}
 
 		default:
-
 			continue
 		}
 	}
