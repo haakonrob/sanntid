@@ -1,13 +1,4 @@
 package ring
-import (
-	"fmt"
-	"net"
-	"strings"
-	"time"
-)
-
-const checkInterval = 500 * time.Millisecond
-package main
 
 import (
 	//"../conn"
