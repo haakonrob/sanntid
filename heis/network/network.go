@@ -1,7 +1,7 @@
 package network
 
 import (
-	"./bcast"
+	"./ring"
 	"./localip"
 	"./peers"
 	"fmt"			
@@ -20,12 +20,13 @@ type Peer struct {
 }
 
 const MAX_NUM_PEERS = 10
-const subnet = "sanntidsal" //or localhost
-const peerPort = 20005
-const ringport = 20006
+//const subnet = "sanntidsal" //or localhost
 const UDPPasscode = "svekonrules"
+const peerPort = 20005
 
-func Monitor(statusCh chan string, loopBack bool, incomingCh chan []byte, outgoingCh chan []byte) {
+var ringport = 20006
+
+func Monitor(statusCh chan string, loopBack bool, subnet string, incomingCh chan interface{}, outgoingCh chan interface{}) {
 
 	/*
 		The id is either 4th number of the local IPv4, or the PID of the
@@ -42,7 +43,9 @@ func Monitor(statusCh chan string, loopBack bool, incomingCh chan []byte, outgoi
 
 	if loopBack {
 		local.ID = fmt.Sprintf("%d", os.Getpid())
+		ringport = os.Getpid()
 	} else {
+		fmt.Println(strings.Split(IP, "."))
 		local.ID = strings.Split(IP, ".")[3]
 	}
 
@@ -50,15 +53,14 @@ func Monitor(statusCh chan string, loopBack bool, incomingCh chan []byte, outgoi
 	peerUpdateCh := make(chan peers.PeerUpdate)
 	peerTxEnable := make(chan bool)
 
-	bcastMsg := UDPPasscode + "_" + local.ID + "-" + local.IP
+	bcastMsg := fmt.Sprintf("%s_%s-%s:%d",UDPPasscode,local.ID, local.IP, ringport)
 	go peers.Transmitter(peerPort, bcastMsg, subnet, peerTxEnable)
 	go peers.Receiver(peerPort, UDPPasscode, peerUpdateCh)
 
 	/* Ring network */
-
 	targetCh := make(chan string)
-	go bcast.Transmitter(ringport, targetCh, outgoingCh)
-	go bcast.Receiver(ringport, local.ID, incomingCh)
+	go ring.Transmitter(targetCh, outgoingCh)
+	go ring.Receiver(ringport, incomingCh)
 
 	fmt.Println("Network module started up PID", local.ID)
 	// every node will send a reply when it has been successfully updated. OK or ERROR.
@@ -69,15 +71,6 @@ func Monitor(statusCh chan string, loopBack bool, incomingCh chan []byte, outgoi
 
 	for {
 		select {
-		case EN := <-bcastEN:
-			peerTxEnable<- EN
-			for !EN {
-				msg := fmt.Sprintf("%t_%s_", false, local.ID)
-				statusCh<- msg
-				EN = <-bcastEN
-				peerTxEnable<- EN
-			}
-			
 			
 		case p := <-peerUpdateCh:
 			activePeers = make([]Peer, len(p.Peers), MAX_NUM_PEERS)
@@ -89,21 +82,21 @@ func Monitor(statusCh chan string, loopBack bool, incomingCh chan []byte, outgoi
 
 		default:
 			if update {
+				update = false
 				if len(activePeers) > 1 {
 					online = true
 					i := getLocalPeerIndex(local, activePeers)
 					next_i := (i + 1) % len(activePeers)
-					targetCh <- activePeers[next_i].ID
+					targetCh <- fmt.Sprintf("%s:%d", activePeers[next_i].IP, ringport)
 
 				} else {
 					online = false
 				}
-				update = false
 				msg := fmt.Sprintf("%t_%s_", online, local.ID)
 				for _, pr := range activePeers {
 					msg = msg + pr.ID + "-"
 				}
-				statusCh <- msg[0:(len(msg) - 1)]
+				statusCh <- msg[0:(len(msg))-1]
 			}
 		}
 

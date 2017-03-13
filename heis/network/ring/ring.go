@@ -63,7 +63,7 @@ func Transmitter(targetCh chan string, chans ...interface{}) {
 	}()
 
 	for {
-		for !initialised{ time.Sleep(time.Millsecond*100) }
+		for !initialised{ time.Sleep(time.Millisecond*100) }
 		chosen, value, _ := reflect.Select(selectCases)
 		buf, _ := json.Marshal(value.Interface())
 		_, err := conn.Write([]byte(typeNames[chosen]+string(buf)))

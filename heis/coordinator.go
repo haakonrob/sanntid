@@ -29,6 +29,8 @@ const (
 	UP            = heis.BUTTON_CALL_UP
 	DOWN          = heis.BUTTON_CALL_DOWN
 	COMMAND       = heis.BUTTON_COMMAND
+	loopBack	  = true
+	subnet		  = "localhost"
 )
 
 type GlobalOrderStruct struct {
@@ -69,14 +71,14 @@ func main() {
 	fsmChan := make(chan fsm.LocalOrderState)
 
 	networkCh := make(chan string)
-	bcastEN := make(chan bool)
-	incomingCh := make(chan []byte)
-	outgoingCh := make(chan []byte)
+	//bcastEN := make(chan bool)
+	incomingCh := make(chan interface{})
+	outgoingCh := make(chan interface{})
 	
 
 	heis.ElevInit()
 	go fsm.Fsm(eventChan, fsmChan, completedOrderChan)
-	go network.Monitor(networkCh, bcastEN, incomingCh, outgoingCh)
+	go network.Monitor(networkCh, true, "localhost", incomingCh, outgoingCh)
 	go heis.Poller(orderChan, eventChan)
 
 	if len(os.Args)>1 {
@@ -183,7 +185,7 @@ func main() {
 
 		default:
 			if orderIterate(COMMAND, N_FLOORS, isLocalTimeout){
-				bcastEN<- false
+				//bcastEN<- false
 
 				fmt.Println("Local timeout, unknown error.")
 				backup := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run coordinator.go ./backupdata")

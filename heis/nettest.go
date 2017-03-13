@@ -5,34 +5,41 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"runtime"
 )
 
 func main() {
-
-	incomingCh := make(chan string, 1)
-	outgoingCh := make(chan string, 1)
+	runtime.GOMAXPROCS(20)
+	incomingCh := make(chan interface{}, 1)
+	outgoingCh := make(chan interface{}, 1)
 	networkCh := make(chan string, 1)
 
 	var online bool = false
 	var localID string
+	var timestamp = time.Now()
 	activeElevs := make([]string, 0, 10)
 
-	go network.Monitor(networkCh, incomingCh, outgoingCh)
-
+	go network.Monitor(networkCh, true, "localhost", incomingCh, outgoingCh)
 	for {
 		select {
 		case msg := <-networkCh:
 			online, localID, activeElevs = decodeNetworkStatus(msg)
 			fmt.Println("Net status: ", online, localID, activeElevs)
+			/*
 			if activeElevs[0] == localID {
+				fmt.Println("Got here")
 				outgoingCh <- "hello"
-			}
+			}*/
 
 		case msg := <-incomingCh:
 			fmt.Println("Received: ", msg)
-			time.Sleep(time.Second)
-			outgoingCh <- msg
+			//time.Sleep(time.Second)
+			//outgoingCh <- msg
 		default:
+			if time.Since(timestamp) > time.Second*2 {
+				timestamp = time.Now()
+				outgoingCh <- "msg"
+			}
 			continue
 		}
 	}
