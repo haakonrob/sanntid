@@ -21,12 +21,11 @@ type Peer struct {
 
 const MAX_NUM_PEERS = 10
 const subnet = "sanntidsal" //or localhost
-const loopBack = true
 const peerPort = 20005
 const ringport = 20006
 const UDPPasscode = "svekonrules"
 
-func Monitor(statusCh chan string, incomingCh chan []byte, outgoingCh chan []byte) {
+func Monitor(statusCh chan string, loopBack bool, incomingCh chan []byte, outgoingCh chan []byte) {
 
 	/*
 		The id is either 4th number of the local IPv4, or the PID of the
