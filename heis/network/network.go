@@ -33,15 +33,18 @@ func Monitor(statusCh chan string, loopBack bool, incomingCh chan []byte, outgoi
 	*/
 	var local Peer
 
-	if loopBack {
-		local.ID = fmt.Sprintf("%d", os.Getpid())
-	}
 	IP, err := localip.LocalIP()
 	if err != nil {
 		fmt.Println(err)
 		IP = "DISCONNECTED"
 	}
 	local.IP = IP
+
+	if loopBack {
+		local.ID = fmt.Sprintf("%d", os.Getpid())
+	} else {
+		local.ID = strings.Split(IP, ".")[3]
+	}
 
 	/* Start monitoring network over UDP */
 	peerUpdateCh := make(chan peers.PeerUpdate)
@@ -66,7 +69,16 @@ func Monitor(statusCh chan string, loopBack bool, incomingCh chan []byte, outgoi
 
 	for {
 		select {
-
+		case EN := <-bcastEN:
+			peerTxEnable<- EN
+			for !EN {
+				msg := fmt.Sprintf("%t_%s_", false, local.ID)
+				statusCh<- msg
+				EN = <-bcastEN
+				peerTxEnable<- EN
+			}
+			
+			
 		case p := <-peerUpdateCh:
 			activePeers = make([]Peer, len(p.Peers), MAX_NUM_PEERS)
 			for i, pr := range p.Peers {

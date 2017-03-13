@@ -59,6 +59,8 @@ var updateFlag bool
 func Fsm(eventChan chan driver.Event, coordinatorChan <-chan LocalOrderState, completedOrderChan chan<- LocalOrderState) {
 
 	fsmInit()
+
+
 	destinationOrder.Floor = NONE
 	
 	for {
@@ -206,11 +208,13 @@ func ShouldStopOnFloor(floor int) bool {
 
 	switch dir {
 	case driver.DIRN_DOWN:
-		if pending[driver.BUTTON_CALL_DOWN][floor] && !completed[driver.BUTTON_CALL_DOWN][floor] {
+		shouldStop := pending[driver.BUTTON_CALL_DOWN][floor] || pending[driver.BUTTON_COMMAND][floor]
+		if shouldStop && !completed[driver.BUTTON_CALL_DOWN][floor] {
 			return true
 		}
 	case driver.DIRN_UP:
-		if pending[driver.BUTTON_CALL_UP][floor] && !completed[driver.BUTTON_CALL_UP][floor] {
+		shouldStop := pending[driver.BUTTON_CALL_UP][floor] || pending[driver.BUTTON_COMMAND][floor]
+		if shouldStop && !completed[driver.BUTTON_CALL_UP][floor] {
 			return true
 		}
 	case driver.DIRN_STOP:
@@ -223,13 +227,11 @@ func ShouldStopOnFloor(floor int) bool {
 
 func fsmInit() {
 	// call getFloorSensor(), if undefined, move to a floor
-	elevMoveUp()
-	for driver.ElevGetFloorSensorSignal() == -1 {
-	}
-	elevStop()
+	driver.ElevSetMotorDirection(driver.DIRN_UP)
+	for driver.ElevGetFloorSensorSignal() == -1 {}
+	driver.ElevSetMotorDirection(driver.DIRN_STOP)
 	orders.PrevFloor = driver.ElevGetFloorSensorSignal()
+	driver.ElevSetFloorIndicator(orders.PrevFloor)
 	elevState = IDLE_STATE
-	newEvent = driver.Event{driver.NOTHING, 0}
-
-
+	newEvent = driver.Event{driver.NOTHING, 0}	
 }
