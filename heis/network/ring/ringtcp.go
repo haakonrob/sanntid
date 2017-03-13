@@ -1,4 +1,4 @@
-package ringtcp
+package main
 
 import (
 	//"../conn"
@@ -7,17 +7,17 @@ import (
 	"net"
 	"reflect"
 	"strings"
+	"time"
 )
 
 func main() {
     chtx := make(chan string)
     chrx := make(chan string)
     updateCh := make(chan string)
-    go Receiver(20000, updateCh, chrx)
-    go Transmitter(20000, , chtx)
+    go Receiver(20000, chrx)
+    go Transmitter(20000, updateCh, chtx)
     updateCh<-"me"
     for {
-        dsafasdfasd    
     }
 }
 
@@ -43,17 +43,20 @@ func Transmitter(port int, targetCh chan string, chans ...interface{}) {
 
     var initialised bool
 	var conn net.Conn
+	var errorCount int
 
 	go func() {
+	    var addr string
 		for {
 			if initialised {
 			    addr = <-targetCh
-			    intialised = false
+			    initialised = false
 			    conn.Close()
 			}
-			conn, err := net.Dial("tcp", addr)
+			c, err := net.Dial("tcp", addr)
 			if err == nil {
 			    initialised = true
+			    conn = c
 			} 
 			    
 		}
@@ -63,7 +66,14 @@ func Transmitter(port int, targetCh chan string, chans ...interface{}) {
 	    if !initialised{  }
 		chosen, value, _ := reflect.Select(selectCases)
 		buf, _ := json.Marshal(value.Interface())
-		conn.Write([]byte(typeNames[chosen]+string(buf)))
+		_, err := conn.Write([]byte(typeNames[chosen]+string(buf)))
+		if err != nil {
+		    errorCount++
+		    time.Sleep(time.Millisecond*100)
+		    if errorCount > 5 {
+		        initialised = false
+		    }
+		}
 	}
 }
 
@@ -73,20 +83,20 @@ func Receiver(port int, chans ...interface{}) {
 	checkArgs(chans...)
     
     var initialised bool
-    reset := make(chan bool)
 	var buf [1024]byte
 	
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
         if err != nil {
             fmt.Println("Unable to listen on port ", port)
         }
-	
+	var conn net.Conn
 	for {
 	    switch initialised {
 	    case false:
-	        conn, err := ln.Accept()
+	        c, err := ln.Accept()
         	if err == nil {
         		initialised = true
+        		conn = c
         	}
         	
         case true:
@@ -97,10 +107,9 @@ func Receiver(port int, chans ...interface{}) {
         		for _, ch := range chans {
         			T := reflect.TypeOf(ch).Elem()
         			typeName := T.String()
-        		
-        			if strings.HasPrefix(msg+"{", typeName) {
+        			if strings.HasPrefix(string(buf[0:n])+"{", typeName) {
         				v := reflect.New(T)
-        				json.Unmarshal([]byte(msg[1])[len(typeName):], v.Interface())
+        				json.Unmarshal(buf[len(typeName):n], v.Interface())
         				reflect.Select([]reflect.SelectCase{{
         					Dir:  reflect.SelectSend,
         					Chan: reflect.ValueOf(ch),
