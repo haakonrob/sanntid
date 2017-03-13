@@ -229,26 +229,26 @@ func updateLocalPendingOrders(){
 func addNewGlobalOrder(order heis.Order)(bool) {
 	ordertype := order.OrderType
 	floor := order.Floor
-	stamp := time.Now()
+	//stamp := time.Now()
 
 	switch ordertype {
 	case UP, DOWN :
-		GlobalOrders.Available[ordertype][floor] = true
-		GlobalOrders.Taken[ordertype][floor] = false
-		GlobalOrders.Timestamps[ordertype][floor] = stamp
-		
-		for _, ID := range(activeElevs) {
-			temp := GlobalOrders.Scores[ID]
-			if ID == localID {
-				scoreAvailableOrder(order.OrderType, order.Floor)	
-				fmt.Println("My score: ", order, GlobalOrders.Scores[localID][order.OrderType][order.Floor])			
-			} else {
-				temp[ordertype][floor] = 0
-				GlobalOrders.Scores[ID] = temp
+		if !GlobalOrders.Taken[ordertype][floor] {
+			GlobalOrders.Available[ordertype][floor] = true
+			//GlobalOrders.Timestamps[ordertype][floor] = stamp
+			
+			for _, ID := range(activeElevs) {
+				temp := GlobalOrders.Scores[ID]
+				if ID == localID {
+					scoreAvailableOrder(order.OrderType, order.Floor)	
+					fmt.Println("My score: ", order, GlobalOrders.Scores[localID][order.OrderType][order.Floor])			
+				} else {
+					temp[ordertype][floor] = 0
+					GlobalOrders.Scores[ID] = temp
+				}
+				//fmt.Println("My score: ", order, GlobalOrders.Scores[localID][order.OrderType][order.Floor])
 			}
-			//fmt.Println("My score: ", order, GlobalOrders.Scores[localID][order.OrderType][order.Floor])
-		}
-	
+		}	
 	default:
 		fmt.Println("Invalid OrderType in addnewglobalorder()")
 	}
@@ -385,6 +385,7 @@ func takeGlobalOrder(ordertype heis.ElevButtonType, floor int)(bool) {
 		GlobalOrders.Taken[ordertype][floor] = true
 		GlobalOrders.Timestamps[ordertype][floor] = time.Now()
 		LocalOrders.Pending[ordertype][floor] = GlobalOrders.Taken[ordertype][floor]
+		LocalOrders.Timestamps[ordertype][floor] = GlobalOrders.Timestamps[ordertype][floor]
 		for _, elev := range(activeElevs) {
 			temp := GlobalOrders.Scores[elev]
 			temp[ordertype][floor] = 0

@@ -114,9 +114,6 @@ func Poller(orders chan Order, events chan Event) {
 		} else if timing && (time.Since(timestamp) > time.Second*2) {
 			timing = false 
 			events<- Event{TIMER_EVENT,1}
-
-			
-			
 		}
 		for i := 0; i < N_FLOORS-1; i++ {
 			press := ElevGetButtonSignal(BUTTON_CALL_UP, i)

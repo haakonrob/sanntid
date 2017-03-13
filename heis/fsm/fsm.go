@@ -231,6 +231,7 @@ func fsmInit() {
 	for driver.ElevGetFloorSensorSignal() == -1 {}
 	driver.ElevSetMotorDirection(driver.DIRN_STOP)
 	orders.PrevFloor = driver.ElevGetFloorSensorSignal()
+	driver.ElevSetFloorIndicator(orders.PrevFloor)
 	elevState = IDLE_STATE
 	newEvent = driver.Event{driver.NOTHING, 0}	
 }
