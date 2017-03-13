@@ -6,6 +6,8 @@ import (
 	"time"
 	"os"
 	"os/signal"
+	"os/exec"
+	"syscall"
 )
 
 /******************************************
@@ -61,6 +63,8 @@ var updateFlag bool
 func Fsm(eventChan chan driver.Event, coordinatorChan <-chan LocalOrderState, completedOrderChan chan<- LocalOrderState) {
 
 	fsmInit()
+
+
 	destinationOrder.Floor = NONE
 	
 	for {
@@ -235,5 +239,16 @@ func fsmInit() {
 	elevState = IDLE_STATE
 	newEvent = driver.Event{driver.NOTHING, 0}
 
+	sigs := make(chan os.Signal)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
+	go func (){
+		<-sigs
+		fmt.Println("\nTermination signal received. Killing motor.")
+		elevStop()
+		/*
+		backup := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run backup.go")
+		backup.Run()*/
+		os.Exit(0)
+	}()
 }
