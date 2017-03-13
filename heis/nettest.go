@@ -19,7 +19,7 @@ func main() {
 	var timestamp = time.Now()
 	activeElevs := make([]string, 0, 10)
 
-	go network.Monitor(networkCh, true, "sanntidsal", incomingCh, outgoingCh)
+	go network.Monitor(networkCh, false, "sanntidsal", incomingCh, outgoingCh)
 	for {
 		select {
 		case msg := <-networkCh:
