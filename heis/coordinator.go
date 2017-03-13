@@ -172,6 +172,9 @@ func main() {
 
 		default:
 
+			_ = orderIterate(COMMAND, N_FLOORS, isLocalTimeout)
+			changeMade = orderIterate(DOWN, N_FLOORS, isGlobalTimeout)
+			
 			continue
 		}
 	}
@@ -273,6 +276,7 @@ func completeLocalOrders(ordertype heis.ElevButtonType, floor int)(bool) {
 	if LocalOrders.Completed[ordertype][floor]{
 		LocalOrders.Pending[ordertype][floor] = false
 		LocalOrders.Completed[ordertype][floor] = false
+		LocalOrders.Timestamps[ordertype][floor] = time.Time{}
 		return true
 	}
 	return false
@@ -288,13 +292,18 @@ func completeGlobalOrders(o heis.ElevButtonType, floor int)(bool) {
 		case UP, DOWN:
 			GlobalOrders.Available[o][floor] = false
 			GlobalOrders.Taken[o][floor] = false
+			GlobalOrders.Timestamps[o][floor] = time.Time{}
 			LocalOrders.Pending[o][floor] = false
 			LocalOrders.Completed[o][floor] = false
+			LocalOrders.Timestamps[o][floor] = time.Time{}
+
 			return true
 		
 		case COMMAND :
 			LocalOrders.Pending[o][floor] = false
 			LocalOrders.Completed[o][floor] = false
+			LocalOrders.Timestamps[o][floor] = time.Time{}
+
 			return true
 
 		default:
@@ -402,4 +411,47 @@ func DecodeGlobalPacket(JsonPacket []byte) (PacketDEC GlobalOrderStruct, err err
 	var GlobalPacketDEC GlobalOrderStruct
 	err = json.Unmarshal(JsonPacket, &GlobalPacketDEC)
 	return GlobalPacketDEC, err
+}
+
+
+func isLocalTimeout(ordertype heis.ElevButtonType, floor int)bool{
+	if time.Since(LocalOrders.Timestamps[ordertype][floor]) > time.Time(time.Second*10){
+		switch online{
+		case true:
+			online = false
+			LocalOrders.Pending[ordertype][floor] = false
+			LocalOrders.Timestamps = time.Time{}
+			//save COMMANDS 
+			//restart
+		case false:
+			//save local state
+			//restart
+		}
+		return true
+
+	}
+	return false
+}
+
+func isGlobalTimeout(ordertype heis.ElevButtonType, floor int)bool{
+	copyOrder := driver.Order
+	if time.Since(GlobalOrders.Timestamps[ordertype][floor] > time.Time(time.Second*10)){
+		select online{
+		case true:
+			GlobalOrders.Taken[ordertype][floor] = false
+			GlobalOrders.Timestamps = time.Time{}
+
+			copyOrder.Val = floor
+			copyOrder.OrderType = ordertype
+
+			addNewGlobalOrder(copyOrder)
+			return true 
+		case false:
+			//dontcare
+			return true
+
+		}
+		return true 
+	}
+	return false
 }
