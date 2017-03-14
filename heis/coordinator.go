@@ -454,16 +454,6 @@ func mergeGlobalOrders(GlobalPacketDEC GlobalOrderStruct) {
 
 }
 
-/*******TEST DECODING ENCODING PACKET*********
-GlobalPacketENC := EncodeGlobalPacket()
-//fmt.Println(string(GlobalPacketENC))
-_ = GlobalPacketENC
-
-GlobalPacketDEC, err := DecodeGlobalPacket(GlobalPacketENC)
-fmt.Println("Test PacketDEC: ", GlobalPacketDEC.Taken)
-_ = err
-****************************************/
-
 func EncodeGlobalPacket() (b []byte) {
 	GlobalPacketD, err := json.Marshal(GlobalOrders)
 	_ = err
