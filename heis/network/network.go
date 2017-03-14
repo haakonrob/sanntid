@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	_ "time"
 )
 
 // We define some custom struct to send over the network.
@@ -19,38 +18,34 @@ type Peer struct {
 	IP string
 }
 
-const MAX_NUM_PEERS = 10
+type Status struct {
+	Online bool
+	LocalID string
+	ActiveIDs [] string
+}
 
-//const subnet = "sanntidsal" //or localhost
-const UDPPasscode = "svekonrulesss"
-const peerPort = 20005
+const 
+(
+ 	MAX_NUM_PEERS = 10
+ 	UDPPasscode = "svekonrules"
+ 	peerPort = 20006
+)
 
-var ringport = 20009
+var (
+	netStat Status
+	// ringport is currently set to the PID, to 
+	// avoid TCP sockets becoming unaavailable after closing.
+	ringport = 20007
+)
 
-func Monitor(statusCh chan string, loopBack bool, subnet string, incomingCh chan []byte, outgoingCh chan []byte) {
-
+func Monitor(statusCh chan Status, loopBack bool, subnet string, incomingCh chan []byte, outgoingCh chan []byte) {
 	/*
-		The id is either 4th number of the local IPv4, or the PID of the
+		The local id is either 4th number of the local IPv4, or the PID of the
 		process, depending on the specified subnet and loopback mode.
 	*/
-	var local Peer
+	local := getLocalInfo(loopBack, subnet)
 
-	IP, err := localip.LocalIP()
-	if err != nil {
-		fmt.Println(err)
-		IP = "DISCONNECTED"
-	}
-	local.IP = IP
-
-	if loopBack {
-		local.ID = fmt.Sprintf("%d", os.Getpid())
-		ringport = os.Getpid()
-	} else {
-		fmt.Println(strings.Split(IP, "."))
-		local.ID = strings.Split(IP, ".")[3]
-	}
-
-	/* Start monitoring network over UDP */
+	/* Start monitoring network using UDP */
 	peerUpdateCh := make(chan peers.PeerUpdate)
 	peerTxEnable := make(chan bool)
 
@@ -58,53 +53,56 @@ func Monitor(statusCh chan string, loopBack bool, subnet string, incomingCh chan
 	go peers.Transmitter(peerPort, bcastMsg, subnet, peerTxEnable)
 	go peers.Receiver(peerPort, UDPPasscode, peerUpdateCh)
 
-	/* Ring network */
-	targetCh := make(chan string)
+	/* Start ring network using TCP */
+	targetCh := make(chan string, 1)
 	go ring.Transmitter(targetCh, outgoingCh)
 	go ring.Receiver(ringport, incomingCh)
 
-	fmt.Println("Network module started up. PID:", local.ID, ", IP: ", local.IP)
-	// every node will send a reply when it has been successfully updated. OK or ERROR.
-
-	var activePeers = make([]Peer, 0, MAX_NUM_PEERS)
-	online := false
-	update := false
-
+	fmt.Println("Network module started up PID", local.ID)
+	
 	for {
-		select {
+		p := <-peerUpdateCh
 
-		case p := <-peerUpdateCh:
-
-			activePeers = make([]Peer, len(p.Peers), MAX_NUM_PEERS)
-			for i, pr := range p.Peers {
-				newData := strings.Split(pr, "-")
-				activePeers[i] = Peer{newData[0], newData[1]}
-			}
-			update = true
-
-		default:
-			if update {
-				update = false
-				if len(activePeers) > 1 {
-					online = true
-					i := getLocalPeerIndex(local, activePeers)
-					next_i := (i + 1) % len(activePeers)
-					nextTarget := activePeers[next_i].IP
-					targetCh <- nextTarget
-				} else {
-					online = false
-				}
-				msg := fmt.Sprintf("%t_%s_", online, local.ID)
-				fmt.Printf(msg)
-				for _, pr := range activePeers {
-					msg = msg + pr.ID + "-"
-				}
-				statusCh <- msg[0 : (len(msg))-1]
-			}
+		activePeers := []Peer{}
+		activeIDs := []string{}
+		for _, pr := range p.Peers {
+			newData := strings.Split(pr, "-")
+			activePeers = append(activePeers, Peer{newData[0], newData[1]} )
+			activeIDs = append(activeIDs, newData[0])
 		}
 
+		if len(activePeers) > 1 {
+			i := getLocalPeerIndex(local, activePeers)
+			next_i := (i + 1) % len(activePeers)
+			targetCh <- activePeers[next_i].IP
+			statusCh <- Status{true, local.ID, activeIDs}
+		} else {
+			statusCh <- Status{false, local.ID, activeIDs}
+		}
 	}
 }
+
+func getLocalInfo(loopBack bool, subnet string)(Peer){
+	var local Peer
+	IP, err := localip.LocalIP()
+	if err != nil {
+		fmt.Println(err)
+		IP = ""
+	}
+
+	local.IP = IP
+	ringport = os.Getpid()
+	fmt.Println("Ring port: ", ringport)
+
+	if loopBack {
+		local.ID = fmt.Sprintf("%d", os.Getpid())
+	} else {
+		fmt.Println(strings.Split(IP, "."))
+		local.ID = strings.Split(IP, ".")[3]
+	}
+	return local
+}
+
 
 func getLocalPeerIndex(p Peer, list []Peer) int {
 	i := 0

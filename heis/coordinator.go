@@ -70,7 +70,7 @@ func main() {
 	eventChan := make(chan heis.Event, 5)
 	fsmChan := make(chan fsm.LocalOrderState)
 
-	networkCh := make(chan string)
+	networkCh := make(chan network.Status)
 	//bcastEN := make(chan bool)
 
 	incomingCh := make(chan []byte)
@@ -79,7 +79,7 @@ func main() {
 
 	heis.ElevInit()
 	go fsm.Fsm(eventChan, fsmChan, completedOrderChan)
-	go network.Monitor(networkCh, true, "sanntidsal", incomingCh, outgoingCh)
+	go network.Monitor(networkCh, false, "sanntidsal", incomingCh, outgoingCh)
 	go heis.Poller(orderChan, eventChan)
 	go timeOut(timeoutChan)
 
@@ -106,7 +106,7 @@ func main() {
 		
 		select {
 		case status := <-networkCh:
-			online, localID, activeElevs = decodeNetworkStatus(status)
+			online, localID, activeElevs = status.Online, status.LocalID, status.ActiveIDs
 			fmt.Println(activeElevs)
 			fmt.Println("Online: ", online)
 			//temp := GlobalOrders.Scores

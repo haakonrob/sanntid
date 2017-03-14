@@ -8,9 +8,6 @@ import (
 	"reflect"
 	"strings"
 	"time"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
 func test() {
@@ -44,45 +41,51 @@ func Transmitter(targetCh chan string, chans ...interface{}) {
 		typeNames[i] = reflect.TypeOf(ch).Elem().String()
 	}
 
-	var initialised bool
 	var conn net.Conn
-	//defer conn.Close()
 	var errorCount int
-	go func() {
-		var addr string
-		for {
-			addr = <-targetCh
-			if initialised {
-				initialised = false
-				conn.Close()
-			}
+	var initialised bool
+
+	addr := <-targetCh
+	c, err := net.Dial("tcp", addr)
+	if err == nil {
+		fmt.Println("Connected to: ", addr)
+		conn = c
+		initialised = true
+		defer conn.Close()
+	} else {
+		fmt.Println("Bad Connection ", addr)
+	}
+	
+	
+	for {
+		if len(targetCh)>0 {
+			addr := <-targetCh
 			c, err := net.Dial("tcp", addr)
 			if err == nil {
 				fmt.Println("Connected to: ", addr)
-				initialised = true
 				conn = c
+				initialised = true
+			} else {
+				initialised = false
+				fmt.Println("Bad Connection ", addr)
 			}
-
-		}
-	}()
-
-	for {
-		for !initialised {
-			time.Sleep(time.Millisecond * 100)
 		}
 		chosen, value, _ := reflect.Select(selectCases)
-		//var err error
 		buf, err := json.Marshal(value.Interface())
 		if err != nil {
 			fmt.Println(err)
 		}
-		_, err = conn.Write([]byte(typeNames[chosen] + string(buf)))
-		if err != nil {
-			errorCount++
-			time.Sleep(time.Millisecond * 100)
-			if errorCount > 5 {
-				initialised = false
-				fmt.Print("Failed to connect 5 times.")
+	
+		if initialised {
+			fmt.Println("Writing")
+			_, err = conn.Write([]byte(typeNames[chosen] + string(buf)))
+			if err != nil {
+				errorCount++
+				time.Sleep(time.Millisecond * 100)
+				if errorCount > 5 {
+					fmt.Print("Failed to connect 5 times.")
+					initialised = false
+				}
 			}
 		}
 	}
@@ -95,14 +98,19 @@ func Receiver(port int, chans ...interface{}) {
 
 	var initialised bool
 	var buf [1024]byte
+	var conn net.Conn
 
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		fmt.Println("Unable to listen on port ", port)
 	}
-	var conn net.Conn
-	//defer conn.Close()
-	//go closeConnOnExit(&conn)
+	c, err := ln.Accept()
+	if err == nil {
+		initialised = true
+		conn = c
+		defer conn.Close()
+	}
+	
 	for {
 		switch initialised {
 		case false:
@@ -189,11 +197,3 @@ func checkArgs(chans ...interface{}) {
 }
 
 	
-
-func closeConnOnExit(c * net.Conn){
-		sigs := make(chan os.Signal)
-		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-		<-sigs
-		fmt.Println("\nClosing connection.")
-		(*c).Close()
-}
