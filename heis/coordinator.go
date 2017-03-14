@@ -502,7 +502,7 @@ func printOrders() {
 	fmt.Println("LocalOrders Pending:")
 	fmt.Println("UP:    ", LocalOrders.Pending[0])
 	fmt.Println("DOWN:  ", LocalOrders.Pending[1])
-	fmt.Println("COMM:  ", LocalOrders.Pending[1])
+	fmt.Println("COMM:  ", LocalOrders.Pending[2])
 	fmt.Println("--------------------------------------------------------")
 }
 
