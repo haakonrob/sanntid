@@ -79,7 +79,7 @@ func Poller(orders chan Order, events chan Event) {
 	var timing bool
 	var timestamp time.Time
 
-	time.Sleep(time.Millisecond*100)
+	//time.Sleep(time.Millisecond*100)
 
 	for {
 		currFloor := ElevGetFloorSensorSignal()

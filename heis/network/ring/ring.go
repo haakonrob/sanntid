@@ -77,7 +77,7 @@ func Transmitter(targetCh chan string, chans ...interface{}) {
 		}
 	
 		if initialised {
-			fmt.Println("Writing")
+			//fmt.Println("Writing")
 			_, err = conn.Write([]byte(typeNames[chosen] + string(buf)))
 			if err != nil {
 				errorCount++
