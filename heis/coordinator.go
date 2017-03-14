@@ -44,6 +44,7 @@ type GlobalOrderStruct struct {
 
 var (
 	GlobalOrders GlobalOrderStruct
+	GlobalMask   GlobalOrderStruct
 	LocalOrders  fsm.LocalOrderState
 	online       bool
 	localID      string
@@ -85,7 +86,7 @@ func main() {
 		LoadFromBackup(fsmChan)
 	}
 
-	tickChan := time.NewTicker(time.Millisecond * 200).C
+	tickChan := time.NewTicker(time.Millisecond * 100).C
 
 	printOrders()
 	for {
@@ -93,26 +94,29 @@ func main() {
 		case status := <-networkCh:
 			online, localID, activeElevs = status.Online, status.LocalID, status.ActiveIDs
 			changesMade = true
-			//fmt.Println("Online: ", online)
 
 		case <-tickChan:
-			if changesMade {
+			//if changesMade {
+			/*
 				if iterateThroughOrders(DOWN, N_FLOORS, takeGlobalOrder) {
 					fsmChan <- LocalOrders
 				}
+			*/
+			// apply mask to GlobalOrders
+			// send mask
+			// zero mask
+			printOrders()
+			changesMade = false
+			iterateThroughOrders(COMMAND, N_FLOORS, setLights)
 
-				printOrders()
-				changesMade = false
-				iterateThroughOrders(COMMAND, N_FLOORS, setLights)
-
-				data, _ := json.Marshal(LocalOrders)
-				_ = ioutil.WriteFile("./backupdata", data, 0644)
-				if online {
-					for i := 0; i < 1; i++ {
-						outgoingCh <- EncodeGlobalPacket()
-					}
+			data, _ := json.Marshal(LocalOrders)
+			_ = ioutil.WriteFile("./backupdata", data, 0644)
+			if online {
+				for i := 0; i < 1; i++ {
+					outgoingCh <- EncodeGlobalPacket()
 				}
 			}
+			//			}
 
 		case msg := <-incomingCh:
 			var GlobalPacketDEC GlobalOrderStruct
