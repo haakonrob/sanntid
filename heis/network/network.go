@@ -1,10 +1,10 @@
 package network
 
 import (
+	"./ring"
 	"./localip"
 	"./peers"
-	"./ring"
-	"fmt"
+	"fmt"			
 	"os"
 	"strings"
 )
@@ -46,8 +46,7 @@ func Monitor(statusCh chan Status, loopBack bool, subnet string, incomingCh chan
 	/* Start monitoring network using UDP */
 	peerUpdateCh := make(chan peers.PeerUpdate)
 	peerTxEnable := make(chan bool)
-
-	bcastMsg := fmt.Sprintf("%s_%s-%s:%d", UDPPasscode, local.ID, local.IP, ringport)
+	bcastMsg := fmt.Sprintf("%s_%s-%s:%d",UDPPasscode,local.ID, local.IP, ringport)
 	go peers.Transmitter(peerPort, bcastMsg, subnet, peerTxEnable)
 	go peers.Receiver(peerPort, UDPPasscode, peerUpdateCh)
 
@@ -61,8 +60,8 @@ func Monitor(statusCh chan Status, loopBack bool, subnet string, incomingCh chan
 	for {
 		p := <-peerUpdateCh
 
-		activePeers := []Peer{}
-		activeIDs := []string{}
+		var activePeers []Peer
+		var activeIDs []string
 		for _, pr := range p.Peers {
 			newData := strings.Split(pr, "-")
 			activePeers = append(activePeers, Peer{newData[0], newData[1]} )
@@ -77,8 +76,11 @@ func Monitor(statusCh chan Status, loopBack bool, subnet string, incomingCh chan
 		} else {
 			statusCh <- Status{false, local.ID, activeIDs}
 		}
+
+		
 	}
 }
+
 
 func getLocalInfo(loopBack bool, subnet string)(Peer){
 	var local Peer
@@ -101,14 +103,13 @@ func getLocalInfo(loopBack bool, subnet string)(Peer){
 }
 
 
-func getLocalPeerIndex(p Peer, list []Peer) int {
+func getLocalPeerIndex(ID Peer, list []Peer) int {
 	i := 0
 	for i < len(list) {
-		if p.ID == list[i].ID {
-			return i
+		if ID == list[i] {
+			break
 		}
 		i++
 	}
-	fmt.Println("My ID isn't in the list.")
 	return i
 }

@@ -1,4 +1,4 @@
-	package heisdriver
+package heisdriver
 
 import (
 	_ "errors"
@@ -28,25 +28,25 @@ var buttonChannelMatrix = [N_FLOORS][N_BUTTONS]int{
 	{BUTTON_UP4, BUTTON_DOWN4, BUTTON_COMMAND4},
 }
 
-type ElevMotorDirection int
+type MotorDirection int
 
 const (
-	DIRN_DOWN ElevMotorDirection = -1 << iota
+	DIRN_DOWN MotorDirection = -1 << iota
 	DIRN_STOP
 	DIRN_UP
 )
 
-type ElevButtonType int
+type ButtonType int
 
 const (
-	BUTTON_CALL_UP ElevButtonType = iota
+	BUTTON_CALL_UP ButtonType = iota
 	BUTTON_CALL_DOWN
 	BUTTON_COMMAND
 )
 
 // Floor 1 is saved as 0, floor 2 is saved as 1, etc
 type Order struct {
-	OrderType ElevButtonType
+	Type ButtonType
 	Floor     int
 }
 
@@ -67,7 +67,7 @@ type Event struct {
 
 var start_timer bool
 
-func ElevStartTimer() {
+func StartTimer() {
 	start_timer = true
 }
 
@@ -145,7 +145,7 @@ func Poller(orders chan Order, events chan Event) {
 	}
 }
 
-func ElevSetMotorDirection(dirn ElevMotorDirection) {
+func SetMotorDirection(dirn ElevMotorDirection) {
 	if dirn == DIRN_STOP {
 		IoWriteAnalog(MOTOR, 0)
 	} else if dirn == DIRN_UP {
@@ -159,7 +159,7 @@ func ElevSetMotorDirection(dirn ElevMotorDirection) {
 	}
 }
 
-func ElevSetButtonLamp(button ElevButtonType, floor int, on bool) {
+func SetButtonLamp(button ElevButtonType, floor int, on bool) {
 	if button > N_BUTTONS || button < 0 || floor < 0 || floor > N_FLOORS {
 		fmt.Println("ERROR set lamp.driver")
 	}
@@ -171,7 +171,7 @@ func ElevSetButtonLamp(button ElevButtonType, floor int, on bool) {
 	}
 }
 
-func ElevSetFloorIndicator(floor int) {
+func SetFloorIndicator(floor int) {
 	// Binary encoding. One light must always be on.
 	if floor > N_FLOORS || floor < 0 {
 		fmt.Println("ERROR floor ind.driver")
@@ -190,7 +190,7 @@ func ElevSetFloorIndicator(floor int) {
 	}
 }
 
-func ElevSetDoorOpenLamp(value bool) {
+func SetDoorOpenLamp(value bool) {
 	if value {
 		IoSetBit(LIGHT_DOOR_OPEN)
 	} else {
@@ -198,7 +198,7 @@ func ElevSetDoorOpenLamp(value bool) {
 	}
 }
 
-func ElevSetStopLamp(value bool) {
+func SetStopLamp(value bool) {
 	if value {
 		IoSetBit(LIGHT_STOP)
 	} else {
@@ -206,7 +206,7 @@ func ElevSetStopLamp(value bool) {
 	}
 }
 
-func ElevGetButtonSignal(button ElevButtonType, floor int) bool {
+func GetButtonSignal(button ElevButtonType, floor int) bool {
 
 	if button > N_BUTTONS || button < 0 || floor < 0 || floor > N_FLOORS {
 		fmt.Println("ERROR get lamp.driver")
@@ -215,7 +215,7 @@ func ElevGetButtonSignal(button ElevButtonType, floor int) bool {
 	return IoReadBit(buttonChannelMatrix[floor][button])
 }
 
-func ElevGetFloorSensorSignal() int {
+func GetFloorSensorSignal() int {
 	if IoReadBit(SENSOR_FLOOR1) {
 		return 0
 	} else if IoReadBit(SENSOR_FLOOR2) {
@@ -229,16 +229,15 @@ func ElevGetFloorSensorSignal() int {
 	}
 }
 
-func ElevGetStopSignal() bool {
+func GetStopSignal() bool {
 	return IoReadBit(STOP)
 }
 
-func ElevGetObstructionSignal() bool {
+func GetObstructionSignal() bool {
 	return IoReadBit(OBSTRUCTION)
 }
 
-func ElevInit() {
-
+func Init() {
 	InitSuccess := IoInit()
 	if !InitSuccess {
 		fmt.Println("ERROR init.driver")
@@ -255,10 +254,11 @@ func ElevInit() {
 	ElevSetFloorIndicator(0x00)
 	ElevSetMotorDirection(DIRN_STOP)
 
-	sigs := make(chan os.Signal)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	
 
 	go func (){
+		sigs := make(chan os.Signal)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		<-sigs
 		fmt.Println("\nTermination signal received. Killing motor.")
 		for ElevGetFloorSensorSignal() == -1 {}

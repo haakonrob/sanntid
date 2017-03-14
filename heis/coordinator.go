@@ -1,487 +1,204 @@
 package main
 
-import (
-	"./fsm"
-	heis "./heisdriver" //"./simulator/client"
-	"./network"
-	"encoding/json"
+import(
 	"fmt"
-	"strings"
 	"time"
-	"os"
-	"os/exec"
-	"io/ioutil"
+    "./network"
+    "./operator"
+	PC"./protocol"
+	elev"./dummydriver"
+	"runtime"
 )
 
-/******************************************
-TODO - Fault tolerance
-Add timestamping logic
-Data logging for backup in case of crash/termination
+type job struct {
+	JobID 		int
+	Owner 		string
+	Timestamp	time.Time
+	Order		elev.Order
+}
 
-
-DISCUSS
-Timestamps in Taken instead of heisnr?
-******************************************/
-
-const (
-	MAX_NUM_ELEVS = 10
-	N_FLOORS      = heis.N_FLOORS
-	UP            = heis.BUTTON_CALL_UP
-	DOWN          = heis.BUTTON_CALL_DOWN
-	COMMAND       = heis.BUTTON_COMMAND
-	loopBack	  = true
-	subnet		  = "localhost"
+var 
+(
+	globalActiveJobs []job
+	jobCount int = 1
+	online bool
+	LocalID string
+	activeIDs []string
 )
 
-type GlobalOrderStruct struct {
-	SenderId          string
-	Available  	[2][N_FLOORS]bool      //'json:"Available"'
-	Taken      	[2][N_FLOORS]bool      //'json:"Taken"'
-	Timestamps 	[2][N_FLOORS]time.Time //'json:"Timestamps"'
-	Scores            map[string][2][N_FLOORS]int        //[MAX_NUM_ELEVS][2][N_FLOORS]int    //'json:"Scores"'
+
+func main(){
+	//elev.Init()
+	runtime.GOMAXPROCS(20)
 	
-} //
+	newOrderCh := make(chan elev.Order)
+	completedOrderCh := make(chan elev.Order)
+	eventCh:= make(chan elev.Event)
+	operatorCh := make(chan elev.Order)
 
-var (
-	GlobalOrders GlobalOrderStruct
-	LocalOrders fsm.LocalOrderState
-	online      bool
-	localID     string
-	activeElevs []string
-	changesMade bool
-)
-
-/*********************************
-Testing for network encoding
-*********************************/
-var str string
-
-/*********************************
-Main
-*********************************/
-
-func main() {
-	
-	activeElevs = make([]string, 0, MAX_NUM_ELEVS)
-	GlobalOrders.Scores = make(map[string][2][N_FLOORS]int)
-
-	orderChan := make(chan heis.Order, 5)
-	completedOrderChan := make(chan fsm.LocalOrderState)
-	eventChan := make(chan heis.Event, 5)
-	fsmChan := make(chan fsm.LocalOrderState)
-
-	networkCh := make(chan string)
-	//bcastEN := make(chan bool)
 	incomingCh := make(chan interface{})
 	outgoingCh := make(chan interface{})
-	
-
-	heis.ElevInit()
-	go fsm.Fsm(eventChan, fsmChan, completedOrderChan)
+	networkCh := make(chan network.Status)
+		
 	go network.Monitor(networkCh, true, "localhost", incomingCh, outgoingCh)
-	go heis.Poller(orderChan, eventChan)
+	go elevoperator.Start(eventCh, operatorCh, completedOrderCh)
+	go elev.Poller(newOrderCh, eventCh)
 
-	if len(os.Args)>1 {
-		backupFilePath := os.Args[1]
-		data, _ := ioutil.ReadFile(backupFilePath)
-		temp := LocalOrders
-		err := json.Unmarshal(data, &temp)
-		if (err == nil){
-			LocalOrders = temp
-			changesMade = true
-			fsmChan<- LocalOrders
-		}
-	} 
-	
 	
 	for {
-		if (changesMade) {
-			changesMade = false
-			orderIterate(COMMAND, N_FLOORS, setLights)
-			data, _ := json.Marshal(LocalOrders)
-			_ = ioutil.WriteFile("./backupdata", data, 0644)
-			if online {
-				for i:=0;i<1;i++ {
-					outgoingCh <- EncodeGlobalPacket()
-				}
-			}
-		}
-		
 		select {
-		case status := <-networkCh:
-			online, localID, activeElevs = decodeNetworkStatus(status)
-			fmt.Println(activeElevs)
-			fmt.Println("Online: ", online)
-
-		case msg := <-incomingCh:
-			//fmt.Println("Network pkt ")
-			var GlobalPacketDEC GlobalOrderStruct
-			err := json.Unmarshal(msg, &GlobalPacketDEC)
-			if err == nil {	
-				GlobalOrders = GlobalPacketDEC
-				//fmt.Println("Good network package", err, GlobalPacketDEC)
-			} else {
-				fmt.Println("Bad network package", err)
+		case stat := <- networkCh:
+			online, LocalID, activeIDs = stat.Online, stat.LocalID, stat.ActiveIDs
+		
+		case newOrder := <- newOrderCh:
+			if (!online || newOrder.Type == elev.BUTTON_COMMAND) {
+				elev.SetButtonLamp(newOrder.Type, newOrder.Floor, true)
+				operatorCh <- newOrder
 				break
 			}
-			
-			orderIterate(DOWN, N_FLOORS, mergeOrders)
-			GlobalOrders.Available = GlobalPacketDEC.Available
-			
-			switch (GlobalOrders.SenderId) {
-			case localID:
-				if orderIterate(DOWN, N_FLOORS,takeGlobalOrder) {
-					changesMade = true
-					//updateLocalPendingOrders()
-					GlobalOrders.SenderId = localID
-					fsmChan <- LocalOrders
-
-					fmt.Println("Taken new order: ", GlobalOrders.Taken)
-					fmt.Println("Local Taken new order: ", LocalOrders.Pending)
-				} else {
-					fmt.Println("None to take: ", GlobalOrders.Taken)
-				}
-			default:
-					changesMade = orderIterate(DOWN, N_FLOORS, scoreAvailableOrder)
-					//fmt.Println("Scored")
-					//fmt.Println("No Orders available")
-					fmt.Println(GlobalOrders.Taken)
+				
+			newJob := job {
+				JobID:		-1,
+				Owner:		"",
+				Timestamp:	time.Now(),
+				Order:		newOrder,
 			}
+			t := PC.GenerateTransaction(newJob, LocalID, PC.SCORE)
+			t = PC.Sign(t, LocalID, elevoperator.ScoreOrder(newOrder))
+			outgoingCh <- t
+			
+		case doneOrder := <- completedOrderCh:
+			completedJobs := findCompletedJobs(doneOrder)
+			
+			for _, j := range(completedJobs) {
+				if online {
+					t := PC.GenerateTransaction(j, LocalID, PC.REMOVE)
+					t = PC.Sign(t, LocalID, 1)
+					outgoingCh <- t
+				}
+				removeJob(j)
+			}
+
+		case msg := <- incomingCh:
+			ProcessTransaction(msg.(PC.Transaction), outgoingCh)  //, conditions)
+		}
+	}
+}
+
+
+func ProcessTransaction(t PC.Transaction, outgoingCh chan interface{})(){
+	data := (t.Content).(job)
 	
-		case newOrder := <-orderChan:
-			switch (online) {
-			case true:
-				if newOrder.OrderType != COMMAND{
-					fmt.Println("New global order.")
-					changesMade = addNewGlobalOrder(newOrder)
-					fmt.Println("Changed: ", changesMade)
-					GlobalOrders.SenderId = localID
-				} else {
-					fmt.Println("New local order.")
-					changesMade = addNewLocalOrder(newOrder)
-					fmt.Println("Changed: ", changesMade)
-					fsmChan <- LocalOrders
-				}
-				// fsm will be updated when packet comes around again
-			case false:
-				changesMade = addNewLocalOrder(newOrder)
-				fmt.Println("Changed: ", changesMade)
-				fsmChan <- LocalOrders
-			}
-			changesMade = true
+	switch (t.Request) {
+	case PC.SCORE:
+		if t.SenderID == LocalID {
 
-			
-		case newLocalOrders := <-completedOrderChan:
-			LocalOrders.Completed = newLocalOrders.Completed
-			switch (online) {
-			case true:
-				changesMade = orderIterate(COMMAND, N_FLOORS, completeGlobalOrders)
-				GlobalOrders.SenderId = localID
-
-			case false:
-				changesMade = orderIterate(COMMAND, N_FLOORS, completeLocalOrders)
-				fsmChan <- LocalOrders
+			newJob := job {
+				JobID:		jobCount,
+				Owner:		mapMax(t.Signatures),
+				Timestamp:	time.Now(),
+				Order:		data.Order,
 			}
 
-		default:
-			if orderIterate(COMMAND, N_FLOORS, isLocalTimeout){
-				//bcastEN<- false
-
-				fmt.Println("Local timeout, unknown error.")
-				backup := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run coordinator.go ./backupdata")
-				backup.Run()
-				os.Exit(0)
-			}
-			changesMade = orderIterate(DOWN, N_FLOORS, isGlobalTimeout)
-		}
-	}
-}
-
-
-func decodeNetworkStatus(str string) (bool, string, []string) {
-	status := strings.Split(str, "_")
-	online := false
-	if status[0] == "true" {
-		online = true
-	}
-	ID := status[1]
-	list := strings.Split(status[2], "-")
-	return online, ID, list
-}
-
-func addNewLocalOrder(order heis.Order)(bool) {
-	ordertype := order.OrderType
-	floor := order.Floor
-	stamp := time.Now()
-	result := false
-	switch ordertype {
-	case UP, DOWN, COMMAND:
-		if !LocalOrders.Pending[ordertype][floor] {
-			LocalOrders.Pending[ordertype][floor] = true
-			LocalOrders.Completed[ordertype][floor] = false
-			LocalOrders.Timestamps[ordertype][floor] = stamp
-			result = true
-		}
-
-	default:
-		fmt.Println("Invalid OrderType in addNewLocalOrder()")
-	}
-	return result
-
-}
-
-func updateLocalPendingOrders(){
-	LocalOrders.Pending[UP] = GlobalOrders.Taken[UP]
-	LocalOrders.Pending[DOWN] = GlobalOrders.Taken[DOWN]
-
-}
-
-func addNewGlobalOrder(order heis.Order)(bool) {
-	ordertype := order.OrderType
-	floor := order.Floor
-	//stamp := time.Now()
-
-	switch ordertype {
-	case UP, DOWN :
-		if !GlobalOrders.Taken[ordertype][floor] {
-			GlobalOrders.Available[ordertype][floor] = true
-			//GlobalOrders.Timestamps[ordertype][floor] = stamp
-			
-			for _, ID := range(activeElevs) {
-				temp := GlobalOrders.Scores[ID]
-				if ID == localID {
-					scoreAvailableOrder(order.OrderType, order.Floor)	
-					fmt.Println("My score: ", order, GlobalOrders.Scores[localID][order.OrderType][order.Floor])			
-				} else {
-					temp[ordertype][floor] = 0
-					GlobalOrders.Scores[ID] = temp
-				}
-				//fmt.Println("My score: ", order, GlobalOrders.Scores[localID][order.OrderType][order.Floor])
-			}
-		}	
-	default:
-		fmt.Println("Invalid OrderType in addnewglobalorder()")
-	}
-	return true
-
-}
-
-
-/****************************************************
- Functions for handling LocalOrders and GLobalOrders
-*****************************************************/
-
-type orderLogic func(heis.ElevButtonType, int)(bool)
-
-//Iterates over specified intevals with a function, 
-//returns true if a single iteration resulted in true
-func orderIterate( oEnd heis.ElevButtonType, fEnd int, orderFun orderLogic )(bool){
-	result := false
-	for o := UP; o <= oEnd; o++ {
-		for f := 0; f < fEnd; f++ {
-			if orderFun(o,f){
-				result = true
-			}
-		}
-	}
-	return result		
-} 
-
-func globalOrdersAvailable(ordertype heis.ElevButtonType, floor int)(bool){
-	if GlobalOrders.Available[ordertype][floor]{
-		return true
-	}
-	return false
-}
-
-//3 x N_FLOORS
-func completeLocalOrders(ordertype heis.ElevButtonType, floor int)(bool) {
-	if LocalOrders.Completed[ordertype][floor]{
-		LocalOrders.Pending[ordertype][floor] = false
-		LocalOrders.Completed[ordertype][floor] = false
-		LocalOrders.Timestamps[ordertype][floor] = time.Time{}
-		return true
-	}
-	return false
-}
-
-
-// 3 x N_FLOORS
-func completeGlobalOrders(o heis.ElevButtonType, floor int)(bool) {
-	completed := LocalOrders.Completed
-
-	if completed[o][floor]{
-		switch o {
-		case UP, DOWN:
-			GlobalOrders.Available[o][floor] = false
-			GlobalOrders.Taken[o][floor] = false
-			GlobalOrders.Timestamps[o][floor] = time.Time{}
-			LocalOrders.Pending[o][floor] = false
-			LocalOrders.Completed[o][floor] = false
-			LocalOrders.Timestamps[o][floor] = time.Time{}
-
-			return true
-		
-		case COMMAND :
-			LocalOrders.Pending[o][floor] = false
-			LocalOrders.Completed[o][floor] = false
-			LocalOrders.Timestamps[o][floor] = time.Time{}
-
-			return true
-
-		default:
-			fmt.Println("Bad ordertype in completeGlobalOrders()")
-		}	
-	}
-	return false
-	
-}
-
-/*************************************************/
-
-//3 x N_FLOORS
-func setLights(ordertype heis.ElevButtonType, floor int)(bool) {
-	var val bool
-	switch ordertype {
-	case COMMAND:
-		val = LocalOrders.Pending[ordertype][floor]
-	case UP, DOWN:
-		if online {
-			val = GlobalOrders.Taken[ordertype][floor]
+			t = PC.GenerateTransaction(newJob, LocalID, PC.ADD)
+			t = PC.Sign(t, LocalID, jobCount)
+			outgoingCh <- t
 		} else {
-			val = LocalOrders.Pending[ordertype][floor]
+			t = PC.Sign(t, LocalID, elevoperator.ScoreOrder(data.Order))
+			outgoingCh <- t
 		}
-		heis.ElevSetButtonLamp(ordertype, floor, val)
+
+	case PC.ADD:
+		if addJob(data) {
+			t = PC.Sign(t, LocalID, 1)
+			if t.SenderID != LocalID {
+				outgoingCh <- t
+			}
+		}
+
+	case PC.REMOVE:
+		if t.SenderID != LocalID {
+			removeJob(data)
+			t = PC.Sign(t, LocalID, 1)
+			outgoingCh <- t
+		}
+
+	case PC.MOVE:
+		if t.SenderID == LocalID {
+
+			newJob := job {
+				JobID:		jobCount,
+				Owner:		mapMax(t.Signatures),
+				Timestamp:	time.Now(),
+				Order:		data.Order,
+			}
+
+			t_remove := PC.GenerateTransaction(newJob, LocalID, PC.REMOVE)
+			t_add := PC.GenerateTransaction(newJob, LocalID, PC.ADD)
+			t_remove = PC.Sign(t, LocalID, 1)
+			t_add = PC.Sign(t, LocalID, 1)
+			outgoingCh <- t_remove
+			outgoingCh <- t_add
+
+		} else {
+			t = PC.Sign(t, LocalID, elevoperator.ScoreOrder(data.Order))
+			outgoingCh <- t
+		}
+		
 	default:
-		fmt.Println("Invalid ordertype in setLights()")
+		fmt.Println("Error, bad transaction query.") 
 	}
-	heis.ElevSetButtonLamp(ordertype, floor, val)
-	return true
 }
 
-//2 x N_FLOORS
-func scoreAvailableOrder(ordertype heis.ElevButtonType, floor int)(bool) {
-	if scores, ok := GlobalOrders.Scores[localID]; ok {
-		if GlobalOrders.Available[ordertype][floor] {
-			//fmt.Println("Actually scored")
-			pFloor, dir := LocalOrders.PrevFloor, LocalOrders.Direction
-			floorDiff := (floor - pFloor)	
-			if floorDiff < 0 {floorDiff = -floorDiff}
-			//randNum := int(byte(localID[len(localID)-1]))
-			scores[ordertype][floor] = 200-floorDiff + (floor - pFloor)*int(dir)*10 //COST FUNC
-			GlobalOrders.Scores[localID] = scores
-			fmt.Println("Available score ", scores[ordertype][floor], scores)
-			return true
+
+func mapMax(m map[string]int)(string){
+	max := 0
+	maxKey := ""
+	for key, val := range m { 
+		if val > max {
+			max = val
+			maxKey = key
 		}
 	}
-	return false
+	return maxKey
 }
 
-// 2 x N_FLOORS
-func isBestScore(ordertype heis.ElevButtonType, floor int) (bool) {
-	// returns false if it finds a better competitor, else returns true.
-
-	for _, elevID := range activeElevs {
-		if value, ok := GlobalOrders.Scores[elevID]; ok {
-			if GlobalOrders.Scores[localID][ordertype][floor] < value[ordertype][floor] {
-				return false
-			} else if GlobalOrders.Scores[localID][ordertype][floor] == 0 {
-				return false
-			}	
-		}
-
-	}
-	return true
-}
-
-//2 x N_FLOORS
-func takeGlobalOrder(ordertype heis.ElevButtonType, floor int)(bool) {
-	changesMade := false
-	if isBestScore(ordertype, floor) && GlobalOrders.Available[ordertype][floor] {
-		fmt.Println("Taking an order")
-		GlobalOrders.Available[ordertype][floor] = false
-		GlobalOrders.Taken[ordertype][floor] = true
-		GlobalOrders.Timestamps[ordertype][floor] = time.Now()
-		LocalOrders.Pending[ordertype][floor] = GlobalOrders.Taken[ordertype][floor]
-		LocalOrders.Timestamps[ordertype][floor] = GlobalOrders.Timestamps[ordertype][floor]
-		for _, elev := range(activeElevs) {
-			temp := GlobalOrders.Scores[elev]
-			temp[ordertype][floor] = 0
-			GlobalOrders.Scores[elev] = temp
-		}
-		changesMade = true
-	}
-	return changesMade
-}
-
-//2 x N_FLOORS
-func mergeOrders(ordertype heis.ElevButtonType, floor int)(bool) {
-	// If an order is listed as taken, but this elev has completed it, the order is removed from globalorders
-	if GlobalOrders.Taken[ordertype][floor] && LocalOrders.Completed[ordertype][floor] {
-		GlobalOrders.Taken[ordertype][floor] = false
-		LocalOrders.Completed[ordertype][floor] = false
+func addJob(newJob job)(bool){
+	if _, alreadyOrdered := findJob(newJob) ; !alreadyOrdered {
+		globalActiveJobs = append(globalActiveJobs, newJob)
+		elev.SetButtonLamp(newJob.Order.Type, newJob.Order.Floor , true)
+		jobCount++
 		return true
 	}
 	return false
+
 }
 
-/*******TEST DECODING ENCODING PACKET*********
-GlobalPacketENC := EncodeGlobalPacket()
-//fmt.Println(string(GlobalPacketENC))
-_ = GlobalPacketENC
-
-GlobalPacketDEC, err := DecodeGlobalPacket(GlobalPacketENC)
-fmt.Println("Test PacketDEC: ", GlobalPacketDEC.Taken)
-_ = err
-****************************************/
-
-func EncodeGlobalPacket() (b []byte) {
-	GlobalPacketD, err := json.Marshal(GlobalOrders)
-	_ = err
-	return GlobalPacketD
+func findJob(lostJob job) (int, bool) {
+	for i, j := range(globalActiveJobs){
+		if j.JobID == lostJob.JobID && (j.Owner == lostJob.Owner) {
+			return i, true
+		}
+	}
+	return 0, false
 }
 
-func DecodeGlobalPacket(JsonPacket []byte) (PacketDEC GlobalOrderStruct, err error) {
-	var GlobalPacketDEC GlobalOrderStruct
-	err = json.Unmarshal(JsonPacket, &GlobalPacketDEC)
-	return GlobalPacketDEC, err
-}
-
-
-func isLocalTimeout(ordertype heis.ElevButtonType, floor int)bool{
-	if LocalOrders.Pending[ordertype][floor] {
-		if time.Since(LocalOrders.Timestamps[ordertype][floor]) > time.Second*10 {
-			if online {
-				LocalOrders.Pending[ordertype][floor] = false			
-			}
-			LocalOrders.Timestamps[ordertype][floor] = time.Now()
-			data, _ := json.Marshal(LocalOrders)
-			_ = ioutil.WriteFile("./backupdata", data, 0644)
+func removeJob(doneJob job)(bool){
+	if i, inList := findJob(doneJob) ; inList {
+		globalActiveJobs = append(globalActiveJobs[:i], globalActiveJobs[i+1:]...)
+			elev.SetButtonLamp(doneJob.Order.Type, doneJob.Order.Floor , false)
+			elev.SetButtonLamp(elev.BUTTON_COMMAND, doneJob.Order.Floor, false)
 			return true
-		}
 	}
 	return false
 }
 
-func isGlobalTimeout(ordertype heis.ElevButtonType, floor int)bool{
-	copyOrder := heis.Order{ordertype, floor}
-	if GlobalOrders.Taken[ordertype][floor] {
-		if (time.Since(GlobalOrders.Timestamps[ordertype][floor]) > time.Second*10) {
-			switch online {
-			case true:
-				GlobalOrders.Taken[ordertype][floor] = false
-				GlobalOrders.Timestamps[ordertype][floor] = time.Now()
-
-				copyOrder.Floor = floor
-				copyOrder.OrderType = ordertype
-
-				addNewGlobalOrder(copyOrder)
-			case false:
-				//dontcare
-
-			}
-			return true 
+func findCompletedJobs(completedOrder elev.Order)([]job){
+	var completedJobs []job
+	for _, job := range(globalActiveJobs){
+		if job.Order.Floor == completedOrder.Floor {
+			completedJobs = append(completedJobs, job)
 		}
 	}
-	return false
+	return completedJobs	
 }
