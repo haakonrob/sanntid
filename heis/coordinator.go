@@ -85,51 +85,57 @@ func main() {
 		LoadFromBackup(fsmChan)
 	}
 
+	tickChan := time.NewTicker(time.Millisecond * 200).C
+
 	printOrders()
 	for {
-		if changesMade {
-			printOrders()
-			changesMade = false
-			iterateThroughOrders(COMMAND, N_FLOORS, setLights)
-
-			data, _ := json.Marshal(LocalOrders)
-			_ = ioutil.WriteFile("./backupdata", data, 0644)
-			if online {
-				for i := 0; i < 1; i++ {
-					outgoingCh <- EncodeGlobalPacket()
-				}
-			}
-		}
-
 		select {
 		case status := <-networkCh:
 			online, localID, activeElevs = status.Online, status.LocalID, status.ActiveIDs
-			fmt.Println("Online: ", online)
+			changesMade = true
+			//fmt.Println("Online: ", online)
+
+		case <-tickChan:
+			if changesMade {
+				if iterateThroughOrders(DOWN, N_FLOORS, takeGlobalOrder) {
+					fsmChan <- LocalOrders
+				}
+
+				printOrders()
+				changesMade = false
+				iterateThroughOrders(COMMAND, N_FLOORS, setLights)
+
+				data, _ := json.Marshal(LocalOrders)
+				_ = ioutil.WriteFile("./backupdata", data, 0644)
+				if online {
+					for i := 0; i < 1; i++ {
+						outgoingCh <- EncodeGlobalPacket()
+					}
+				}
+			}
 
 		case msg := <-incomingCh:
 			var GlobalPacketDEC GlobalOrderStruct
 			err := json.Unmarshal(msg, &GlobalPacketDEC)
 			if err == nil {
 				mergeGlobalOrders(GlobalPacketDEC)
-				iterateThroughOrders(DOWN, N_FLOORS, scoreAvailableOrder)
-				printOrders()
-
+				changesMade = iterateThroughOrders(DOWN, N_FLOORS, scoreAvailableOrder)
 			} else {
 				fmt.Println("Bad network package", string(msg))
 				break
 			}
-			iterateThroughOrders(DOWN, N_FLOORS, MergeWithLocalOrders)
-
-			if GlobalOrders.SenderId == localID {
-				if iterateThroughOrders(DOWN, N_FLOORS, takeGlobalOrder) {
-					printOrders()
-					changesMade = true
-					GlobalOrders.SenderId = localID
-					fsmChan <- LocalOrders
-				}
-			} else {
-				changesMade = iterateThroughOrders(DOWN, N_FLOORS, scoreAvailableOrder)
-			}
+			changesMade = iterateThroughOrders(DOWN, N_FLOORS, MergeWithLocalOrders)
+			/*
+				if GlobalOrders.SenderId == localID {
+					if iterateThroughOrders(DOWN, N_FLOORS, takeGlobalOrder) {
+						printOrders()
+						changesMade = true
+						GlobalOrders.SenderId = localID
+						fsmChan <- LocalOrders
+					}
+				} else {
+					changesMade = iterateThroughOrders(DOWN, N_FLOORS, scoreAvailableOrder)
+				}*/
 
 		case newOrder := <-orderChan:
 			switch online {
@@ -149,6 +155,7 @@ func main() {
 
 		case newLocalOrders := <-completedOrderChan:
 			LocalOrders.Completed = newLocalOrders.Completed
+			changesMade = true
 			switch online {
 			case true:
 				changesMade = iterateThroughOrders(COMMAND, N_FLOORS, completeGlobalOrders)
@@ -160,11 +167,13 @@ func main() {
 			}
 
 		case timeOut := <-timeoutChan:
+			changesMade = true
 			switch timeOut {
 			case "LOCAL_TIMEOUT":
-				BackupRestart()
+				//BackupRestart()
 			case "GLOBAL_TIMEOUT":
 				changesMade = true
+				fmt.Println("Global timeout?")
 			default:
 				fmt.Println("Error timeout?")
 			}
@@ -186,7 +195,7 @@ func decodeNetworkStatus(str string) (bool, string, []string) {
 /*************************************************************************************************
  Functions for handling and merging LocalOrders and GlobalOrders.
  Most of the complexity is due to the array iteration.
-
+scp ./coordinator student@129.241.187.151:~/coordinator
 *************************************************************************************************/
 
 func addNewLocalOrder(order heis.Order) bool {
@@ -222,7 +231,7 @@ func addNewGlobalOrder(order heis.Order) bool {
 			for _, ID := range activeElevs {
 				scores, _ := GlobalOrders.Scores[ID]
 				if ID == localID {
-					scoreAvailableOrder(order.OrderType, order.Floor)
+					return true //scoreAvailableOrder(order.OrderType, order.Floor)
 				} else {
 					scores[ordertype][floor] = 0
 					GlobalOrders.Scores[ID] = scores
@@ -335,7 +344,7 @@ func scoreAvailableOrder(ordertype heis.ElevButtonType, floor int) bool {
 				floorDiff = -floorDiff
 			}
 
-			scores[ordertype][floor] = 200 - floorDiff + floorDiff*int(dir)*10 //COST FUNC
+			scores[ordertype][floor] = 200 - floorDiff*40 + floorDiff*int(dir)*10 //COST FUNC
 			GlobalOrders.Scores[localID] = scores
 			return true
 
@@ -352,20 +361,22 @@ func scoreAvailableOrder(ordertype heis.ElevButtonType, floor int) bool {
 // 2 x N_FLOORS
 func isBestScore(ordertype heis.ElevButtonType, floor int) bool {
 	// returns false if it finds a better competitor, else returns true.
+	localScores := GlobalOrders.Scores[localID]
+	if localScores[ordertype][floor] == 0 {
+		return false
+	}
 	for _, elevID := range activeElevs {
-		if value, ok := GlobalOrders.Scores[elevID]; ok {
+		if scores, ok := GlobalOrders.Scores[elevID]; ok {
 			if elevID != localID {
-				if GlobalOrders.Scores[localID][ordertype][floor] < value[ordertype][floor] {
-
+				if scores[ordertype][floor] == 0 {
 					return false
-				} else if GlobalOrders.Scores[localID][ordertype][floor] == 0 {
+				} else if localScores[ordertype][floor] < scores[ordertype][floor] {
 					return false
 				}
 			}
 		}
 	}
 	//fmt.Println("Add score: ", value)
-
 	return true
 }
 
@@ -451,6 +462,8 @@ func isGlobalTimeout(ordertype heis.ElevButtonType, floor int) bool {
 		if time.Since(GlobalOrders.Timestamps[ordertype][floor]) > time.Second*10 {
 			switch online {
 			case true:
+
+				GlobalOrders.Available[ordertype][floor] = true
 				GlobalOrders.Taken[ordertype][floor] = false
 				GlobalOrders.Timestamps[ordertype][floor] = time.Now()
 
@@ -469,14 +482,15 @@ func isGlobalTimeout(ordertype heis.ElevButtonType, floor int) bool {
 }
 
 func printOrders() {
-	fmt.Printf("\033[0;0H")
+	/*t.Printf("\033[0;0H")
 	for i := 0; i < 50; i++ {
 		for j := 0; j < 100; j++ {
 			fmt.Printf(" ")
 		}
 		fmt.Printf("\n")
-	}
-	fmt.Printf("\033[0;0H")
+	}*/
+	fmt.Printf("\n\n\n\n\n\n")
+	fmt.Println("Online:  ", online)
 	fmt.Println("LocalID:  ", localID)
 	fmt.Println("Active IDs:                      ")
 	fmt.Println(activeElevs)
@@ -510,10 +524,10 @@ func timeOut(timeoutChan chan string) {
 	for {
 		time.Sleep(time.Second)
 		if iterateThroughOrders(COMMAND, N_FLOORS, isLocalTimeout) {
-			//fmt.Println("Timeout local", LocalOrders.Timestamps)
+			fmt.Println("Timeout local")
 			timeoutChan <- "LOCAL_TIMEOUT"
 		} else if iterateThroughOrders(DOWN, N_FLOORS, isGlobalTimeout) {
-			//fmt.Println("Timeout global", GlobalOrders.Timestamps)
+			fmt.Println("Timeout global")
 			timeoutChan <- "GLOBAL_TIMEOUT"
 		}
 	}

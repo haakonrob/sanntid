@@ -1,13 +1,12 @@
-	package heisdriver
+package heisdriver
 
 import (
 	_ "errors"
 	"fmt"
-	"time"
 	"os"
 	"os/signal"
 	"syscall"
-	"os/exec"
+	"time"
 )
 
 const N_FLOORS = 4
@@ -85,7 +84,7 @@ func Poller(orders chan Order, events chan Event) {
 		currFloor := ElevGetFloorSensorSignal()
 		stopButton := ElevGetStopSignal()
 		obstructionSwitch := ElevGetObstructionSignal()
-		
+
 		if currFloor != -1 && !atFloor {
 			atFloor = true
 			events <- Event{FLOOR_EVENT, currFloor}
@@ -112,10 +111,10 @@ func Poller(orders chan Order, events chan Event) {
 			start_timer = false
 			timing = true
 			timestamp = time.Now()
-			
+
 		} else if timing && (time.Since(timestamp) > time.Second*2) {
-			timing = false 
-			events<- Event{TIMER_EVENT,1}
+			timing = false
+			events <- Event{TIMER_EVENT, 1}
 		}
 		for i := 0; i < N_FLOORS-1; i++ {
 			press := ElevGetButtonSignal(BUTTON_CALL_UP, i)
@@ -257,17 +256,14 @@ func ElevInit() {
 	ElevSetFloorIndicator(0x00)
 	ElevSetMotorDirection(DIRN_STOP)
 
-	
-	go func (){
+	go func() {
 		sigs := make(chan os.Signal)
 		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		<-sigs
 		fmt.Println("\nTermination signal received. Killing motor.")
-		for ElevGetFloorSensorSignal() == -1 {}
+		for ElevGetFloorSensorSignal() == -1 {
+		}
 		ElevSetMotorDirection(DIRN_STOP)
-		backup := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run coordinator.go ./backupdata")
-		backup.Run()
-		os.Exit(0)
 	}()
 
 }

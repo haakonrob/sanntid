@@ -19,21 +19,20 @@ type Peer struct {
 }
 
 type Status struct {
-	Online bool
-	LocalID string
-	ActiveIDs [] string
+	Online    bool
+	LocalID   string
+	ActiveIDs []string
 }
 
-const 
-(
- 	MAX_NUM_PEERS = 10
- 	UDPPasscode = "svekonrules"
- 	peerPort = 20006
+const (
+	MAX_NUM_PEERS = 10
+	UDPPasscode   = "svekonrules"
+	peerPort      = 20006
 )
 
 var (
 	netStat Status
-	// ringport is currently set to the PID, to 
+	// ringport is currently set to the PID, to
 	// avoid TCP sockets becoming unaavailable after closing.
 	ringport = 20007
 )
@@ -59,7 +58,7 @@ func Monitor(statusCh chan Status, loopBack bool, subnet string, incomingCh chan
 	go ring.Receiver(ringport, incomingCh)
 
 	fmt.Println("Network module started up PID", local.ID)
-	
+
 	for {
 		p := <-peerUpdateCh
 
@@ -67,7 +66,7 @@ func Monitor(statusCh chan Status, loopBack bool, subnet string, incomingCh chan
 		activeIDs := []string{}
 		for _, pr := range p.Peers {
 			newData := strings.Split(pr, "-")
-			activePeers = append(activePeers, Peer{newData[0], newData[1]} )
+			activePeers = append(activePeers, Peer{newData[0], newData[1]})
 			activeIDs = append(activeIDs, newData[0])
 		}
 
@@ -82,7 +81,7 @@ func Monitor(statusCh chan Status, loopBack bool, subnet string, incomingCh chan
 	}
 }
 
-func getLocalInfo(loopBack bool, subnet string)(Peer){
+func getLocalInfo(loopBack bool, subnet string) Peer {
 	var local Peer
 	IP, err := localip.LocalIP()
 	if err != nil {
@@ -102,7 +101,6 @@ func getLocalInfo(loopBack bool, subnet string)(Peer){
 	}
 	return local
 }
-
 
 func getLocalPeerIndex(p Peer, list []Peer) int {
 	i := 0
