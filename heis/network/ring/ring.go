@@ -11,14 +11,14 @@ import (
 )
 
 func test() {
-    chtx := make(chan string)
-    chrx := make(chan string)
-    updateCh := make(chan string)
-    go Receiver(20000, chrx)
-    go Transmitter(updateCh, chtx)
-    updateCh<-"me"
-    for {
-    }
+	chtx := make(chan string)
+	chrx := make(chan string)
+	updateCh := make(chan string)
+	go Receiver(20000, chrx)
+	go Transmitter(updateCh, chtx)
+	updateCh <- "me"
+	for {
+	}
 }
 
 // Encodes received values from `chans` into type-tagged JSON, then broadcasts
@@ -30,7 +30,7 @@ func Transmitter(targetCh chan string, chans ...interface{}) {
 	for _, _ = range chans {
 		n++
 	}
-    
+
 	selectCases := make([]reflect.SelectCase, n)
 	typeNames := make([]string, n)
 	for i, ch := range chans {
@@ -41,38 +41,42 @@ func Transmitter(targetCh chan string, chans ...interface{}) {
 		typeNames[i] = reflect.TypeOf(ch).Elem().String()
 	}
 
-    var initialised bool
+	var initialised bool
 	var conn net.Conn
 	var errorCount int
 
 	go func() {
-	    var addr string
+		var addr string
 		for {
+			addr = <-targetCh
 			if initialised {
-			    addr = <-targetCh
-			    initialised = false
-			    conn.Close()
+				initialised = false
+				conn.Close()
 			}
 			c, err := net.Dial("tcp", addr)
 			if err == nil {
-			    initialised = true
-			    conn = c
-			} 
-			    
+				fmt.Println("Connected to: ", addr)
+				initialised = true
+				conn = c
+			}
+
 		}
 	}()
 
 	for {
-		for !initialised{ time.Sleep(time.Millisecond*100) }
+		for !initialised {
+			time.Sleep(time.Millisecond * 100)
+		}
 		chosen, value, _ := reflect.Select(selectCases)
 		buf, _ := json.Marshal(value.Interface())
-		_, err := conn.Write([]byte(typeNames[chosen]+string(buf)))
+		_, err := conn.Write([]byte(typeNames[chosen] + string(buf)))
 		if err != nil {
-		    errorCount++
-		    time.Sleep(time.Millisecond*100)
-		    if errorCount > 5 {
-		        initialised = false
-		    }
+			errorCount++
+			time.Sleep(time.Millisecond * 100)
+			if errorCount > 5 {
+				initialised = false
+				fmt.Print("Failed to connect 5 times.")
+			}
 		}
 	}
 }
@@ -81,47 +85,46 @@ func Transmitter(targetCh chan string, chans ...interface{}) {
 // sends the decoded value on the corresponding channel
 func Receiver(port int, chans ...interface{}) {
 	checkArgs(chans...)
-    
-    var initialised bool
+
+	var initialised bool
 	var buf [1024]byte
-	
+
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-        if err != nil {
-            fmt.Println("Unable to listen on port ", port)
-        }
+	if err != nil {
+		fmt.Println("Unable to listen on port ", port)
+	}
 	var conn net.Conn
 	for {
-	    switch initialised {
-	    case false:
-	        c, err := ln.Accept()
-        	if err == nil {
-        		initialised = true
-        		conn = c
-        	}
-        	
-        case true:
-    		n, err := conn.Read(buf[0:])
-    		if err != nil {
-    		    initialised = false
-    		} else {    
-        		for _, ch := range chans {
-        			T := reflect.TypeOf(ch).Elem()
-        			typeName := T.String()
-        			if strings.HasPrefix(string(buf[0:n])+"{", typeName) {
-        				v := reflect.New(T)
-        				json.Unmarshal(buf[len(typeName):n], v.Interface())
-        				reflect.Select([]reflect.SelectCase{{
-        					Dir:  reflect.SelectSend,
-        					Chan: reflect.ValueOf(ch),
-        					Send: reflect.Indirect(v),
-        				}})
-        			}
-        		}
-    		}
-	    }
+		switch initialised {
+		case false:
+			c, err := ln.Accept()
+			if err == nil {
+				initialised = true
+				conn = c
+			}
+
+		case true:
+			n, err := conn.Read(buf[0:])
+			if err != nil {
+				initialised = false
+			} else {
+				for _, ch := range chans {
+					T := reflect.TypeOf(ch).Elem()
+					typeName := T.String()
+					if strings.HasPrefix(string(buf[0:n])+"{", typeName) {
+						v := reflect.New(T)
+						json.Unmarshal(buf[len(typeName):n], v.Interface())
+						reflect.Select([]reflect.SelectCase{{
+							Dir:  reflect.SelectSend,
+							Chan: reflect.ValueOf(ch),
+							Send: reflect.Indirect(v),
+						}})
+					}
+				}
+			}
+		}
 	}
 }
-
 
 // Checks that args to Tx'er/Rx'er are valid:
 //  All args must be channels
