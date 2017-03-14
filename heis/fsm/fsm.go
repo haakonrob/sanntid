@@ -44,11 +44,11 @@ type LocalOrderState struct {
 type stateTransition func()
 
 var stateTable = [4][5]stateTransition{
-//  NOTHING 	FLOOR		STOP  		OBSTRUCT 	TIMER
-	{nextOrder,	 null, 		EM_stop, 	null, 	null}, 		/*IDLE_STATE*/
-	{null, 		newFloor, 	EM_stop, 	null, 	null},   	/*MOVING_STATE*/
-	{null, 		null, 		EM_stop, 	null, 	closeDoors},       /*COMPLETING_ORDER_STATE*/
-	{null, 		null, 		end_EM_stop, 	null, 	null}}   		/*EM_STOP_STATE*/
+//  NOTHING 	FLOOR		STOP  			OBSTRUCT 	TIMER
+	{nextOrder,	null, 		EM_stop, 		null, 		null}, 		/*IDLE_STATE*/
+	{null, 		newFloor, 	EM_stop, 		null, 		null},   	/*MOVING_STATE*/
+	{null, 		null, 		EM_stop, 		null, 		closeDoors},       /*COMPLETING_ORDER_STATE*/
+	{null, 		null, 		end_EM_stop, 	null, 		null}}   		/*EM_STOP_STATE*/
 
 var elevState State
 var orders LocalOrderState
@@ -56,11 +56,10 @@ var newEvent driver.Event
 var destinationOrder driver.Order
 var updateFlag bool
 
+
 func Fsm(eventChan chan driver.Event, coordinatorChan <-chan LocalOrderState, completedOrderChan chan<- LocalOrderState) {
 
 	fsmInit()
-
-
 	destinationOrder.Floor = NONE
 	
 	for {
@@ -72,17 +71,16 @@ func Fsm(eventChan chan driver.Event, coordinatorChan <-chan LocalOrderState, co
 		case newOrders := <-coordinatorChan:
 			orders.Pending = newOrders.Pending
 			orders.Completed = newOrders.Completed
-
-		default:
-			if updateFlag {
-				completedOrderChan<- orders
-				updateFlag = false
-			}
-			time.Sleep(time.Millisecond * 100)
-			stateTable[elevState][newEvent.Type]()
 		}
-	}
+		if updateFlag {
+			completedOrderChan<- orders
+			updateFlag = false
+		}
+		
+		stateTable[elevState][newEvent.Type]()
+		}	
 }
+
 
 func null() {
 	return

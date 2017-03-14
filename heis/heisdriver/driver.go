@@ -79,6 +79,8 @@ func Poller(orders chan Order, events chan Event) {
 	var timing bool
 	var timestamp time.Time
 
+	time.Sleep(time.Millisecond*100)
+
 	for {
 		currFloor := ElevGetFloorSensorSignal()
 		stopButton := ElevGetStopSignal()
@@ -255,15 +257,14 @@ func ElevInit() {
 	ElevSetFloorIndicator(0x00)
 	ElevSetMotorDirection(DIRN_STOP)
 
-	sigs := make(chan os.Signal)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
+	
 	go func (){
+		sigs := make(chan os.Signal)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 		<-sigs
 		fmt.Println("\nTermination signal received. Killing motor.")
 		for ElevGetFloorSensorSignal() == -1 {}
 		ElevSetMotorDirection(DIRN_STOP)
-		
 		backup := exec.Command("gnome-terminal", "-x", "sh", "-c", "go run coordinator.go ./backupdata")
 		backup.Run()
 		os.Exit(0)

@@ -8,6 +8,9 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 func test() {
@@ -43,8 +46,8 @@ func Transmitter(targetCh chan string, chans ...interface{}) {
 
 	var initialised bool
 	var conn net.Conn
+	//defer conn.Close()
 	var errorCount int
-
 	go func() {
 		var addr string
 		for {
@@ -68,8 +71,12 @@ func Transmitter(targetCh chan string, chans ...interface{}) {
 			time.Sleep(time.Millisecond * 100)
 		}
 		chosen, value, _ := reflect.Select(selectCases)
-		buf, _ := json.Marshal(value.Interface())
-		_, err := conn.Write([]byte(typeNames[chosen] + string(buf)))
+		//var err error
+		buf, err := json.Marshal(value.Interface())
+		if err != nil {
+			fmt.Println(err)
+		}
+		_, err = conn.Write([]byte(typeNames[chosen] + string(buf)))
 		if err != nil {
 			errorCount++
 			time.Sleep(time.Millisecond * 100)
@@ -94,6 +101,8 @@ func Receiver(port int, chans ...interface{}) {
 		fmt.Println("Unable to listen on port ", port)
 	}
 	var conn net.Conn
+	//defer conn.Close()
+	//go closeConnOnExit(&conn)
 	for {
 		switch initialised {
 		case false:
@@ -113,7 +122,10 @@ func Receiver(port int, chans ...interface{}) {
 					typeName := T.String()
 					if strings.HasPrefix(string(buf[0:n])+"{", typeName) {
 						v := reflect.New(T)
-						json.Unmarshal(buf[len(typeName):n], v.Interface())
+						err = json.Unmarshal(buf[len(typeName):n], v.Interface())
+						if err != nil {
+							//fmt.Println(err, buf)
+						}
 						reflect.Select([]reflect.SelectCase{{
 							Dir:  reflect.SelectSend,
 							Chan: reflect.ValueOf(ch),
@@ -174,4 +186,14 @@ func checkArgs(chans ...interface{}) {
 			}
 		}
 	}
+}
+
+	
+
+func closeConnOnExit(c * net.Conn){
+		sigs := make(chan os.Signal)
+		signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+		<-sigs
+		fmt.Println("\nClosing connection.")
+		(*c).Close()
 }

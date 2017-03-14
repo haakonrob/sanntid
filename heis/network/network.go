@@ -25,9 +25,9 @@ const MAX_NUM_PEERS = 10
 const UDPPasscode = "svekonrulesss"
 const peerPort = 20005
 
-var ringport = 20006
+var ringport = 20009
 
-func Monitor(statusCh chan string, loopBack bool, subnet string, incomingCh chan interface{}, outgoingCh chan interface{}) {
+func Monitor(statusCh chan string, loopBack bool, subnet string, incomingCh chan []byte, outgoingCh chan []byte) {
 
 	/*
 		The id is either 4th number of the local IPv4, or the PID of the
