@@ -31,37 +31,40 @@ const (
 
 /*
 This variable is used as means of communication between the coordinator and the state machine.
-The coordinator sets the Pending array, and fsm sets the completed, orders.PrevFloor and direction variables.
+The coordinator sets the Pending array, and fsm sets the completed, PrevFloor and direction variables.
 */
-type LocalOrderState struct {
+type Orders struct {
 	Pending    [3][NUM_FLOORS]bool
 	Completed  [3][NUM_FLOORS]bool
 	Timestamps [3][NUM_FLOORS]time.Time
-	PrevFloor  int
-	Direction  driver.ElevMotorDirection
 }
 
 type stateTransition func()
 
 var stateTable = [4][5]stateTransition{
-//  NOTHING 	FLOOR		STOP  			OBSTRUCT 	TIMER
-	{nextOrder,	null, 		EM_stop, 		null, 		null}, 		/*IDLE_STATE*/
-	{null, 		newFloor, 	EM_stop, 		null, 		null},   	/*MOVING_STATE*/
-	{null, 		null, 		EM_stop, 		null, 		closeDoors},       /*COMPLETING_ORDER_STATE*/
-	{null, 		null, 		end_EM_stop, 	null, 		null}}   		/*EM_STOP_STATE*/
+	//  NOTHING 	FLOOR		STOP  			OBSTRUCT 	TIMER
+	{nextOrder, null, EM_stop, null, null},  /*IDLE_STATE*/
+	{null, newFloor, EM_stop, null, null},   /*MOVING_STATE*/
+	{null, null, EM_stop, null, closeDoors}, /*COMPLETING_ORDER_STATE*/
+	{null, null, end_EM_stop, null, null}}   /*EM_STOP_STATE*/
 
-var elevState State
-var orders LocalOrderState
-var newEvent driver.Event
-var destinationOrder driver.Order
-var updateFlag bool
+var (
+	elevState State
+	PrevFloor int
+	Direction driver.ElevMotorDirection
 
+	orders           Orders
+	newEvent         driver.Event
+	destinationOrder driver.Order
+	updateFlag       bool
+)
 
-func Fsm(eventChan chan driver.Event, coordinatorChan <-chan LocalOrderState, completedOrderChan chan<- LocalOrderState) {
+func Fsm(eventChan chan driver.Event, coordinatorChan <-chan Orders, completedOrderChan chan<- Orders) {
 
 	fsmInit()
 	destinationOrder.Floor = NONE
-	
+	tickChan := time.NewTicker(time.Second).C
+
 	for {
 		select {
 		case newEvent = <-eventChan:
@@ -71,16 +74,17 @@ func Fsm(eventChan chan driver.Event, coordinatorChan <-chan LocalOrderState, co
 		case newOrders := <-coordinatorChan:
 			orders.Pending = newOrders.Pending
 			orders.Completed = newOrders.Completed
-		}
-		if updateFlag {
-			completedOrderChan<- orders
-			updateFlag = false
-		}
-		
-		stateTable[elevState][newEvent.Type]()
-		}	
-}
 
+		case _ = <-tickChan:
+			if updateFlag {
+				completedOrderChan <- orders
+				updateFlag = false
+			}
+			stateTable[elevState][driver.NOTHING]()
+		}
+
+	}
+}
 
 func null() {
 	return
@@ -110,20 +114,20 @@ func nextOrder() {
 		nextOrder = destinationOrder
 	}
 
-	if foundOrder {	
-		if nextOrder.Floor == orders.PrevFloor {
-			completeOrder(orders.PrevFloor)
-		} else if nextOrder.Floor < orders.PrevFloor {
+	if foundOrder {
+		if nextOrder.Floor == PrevFloor {
+			completeOrder(PrevFloor)
+		} else if nextOrder.Floor < PrevFloor {
 			elevMoveDown()
 			elevState = MOVING_STATE
-		} else if nextOrder.Floor > orders.PrevFloor {
+		} else if nextOrder.Floor > PrevFloor {
 			elevMoveUp()
 			elevState = MOVING_STATE
 		} else {
 			fmt.Println("Failure in nextOrder()")
 			return
 		}
-		
+
 	}
 
 }
@@ -131,12 +135,12 @@ func nextOrder() {
 func completeOrder(floor int) {
 	elevState = COMPLETING_ORDER_STATE
 	if destinationOrder.Floor == floor {
-			destinationOrder.Floor = NONE
+		destinationOrder.Floor = NONE
 	}
 	for ordertype := COMMAND; ordertype >= UP; ordertype-- {
-		if orders.Pending[ordertype][orders.PrevFloor] {
-			orders.Pending[ordertype][orders.PrevFloor] = false
-			orders.Completed[ordertype][orders.PrevFloor] = true
+		if orders.Pending[ordertype][PrevFloor] {
+			orders.Pending[ordertype][PrevFloor] = false
+			orders.Completed[ordertype][PrevFloor] = true
 		}
 	}
 	elevStop()
@@ -146,8 +150,8 @@ func completeOrder(floor int) {
 }
 
 func newFloor() {
-	orders.PrevFloor = newEvent.Val
-	floor := orders.PrevFloor
+	PrevFloor = newEvent.Val
+	floor := PrevFloor
 	driver.ElevSetFloorIndicator(floor)
 
 	if destinationOrder.Floor != NONE {
@@ -176,7 +180,7 @@ func end_EM_stop() {
 	}
 }
 
-func closeDoors(){
+func closeDoors() {
 	elevState = IDLE_STATE
 	driver.ElevSetDoorOpenLamp(false)
 }
@@ -185,26 +189,26 @@ func closeDoors(){
 
 func elevStop() {
 	driver.ElevSetMotorDirection(driver.DIRN_STOP)
-	orders.Direction = driver.DIRN_STOP
+	Direction = driver.DIRN_STOP
 }
 
 func elevMoveUp() {
 	driver.ElevSetMotorDirection(driver.DIRN_UP)
-	orders.Direction = driver.DIRN_UP
+	Direction = driver.DIRN_UP
 }
 
 func elevMoveDown() {
 	driver.ElevSetMotorDirection(driver.DIRN_DOWN)
-	orders.Direction = driver.DIRN_DOWN
+	Direction = driver.DIRN_DOWN
 }
+
 /****************************************/
 
 func ShouldStopOnFloor(floor int) bool {
 	pending := orders.Pending
 	completed := orders.Completed
-	dir := orders.Direction
 
-	switch dir {
+	switch Direction {
 	case driver.DIRN_DOWN:
 		shouldStop := pending[driver.BUTTON_CALL_DOWN][floor] || pending[driver.BUTTON_COMMAND][floor]
 		if shouldStop && !completed[driver.BUTTON_CALL_DOWN][floor] {
@@ -223,13 +227,18 @@ func ShouldStopOnFloor(floor int) bool {
 	return false
 }
 
+func GetPrevFloor() int {
+	return PrevFloor
+}
+
 func fsmInit() {
 	// call getFloorSensor(), if undefined, move to a floor
 	driver.ElevSetMotorDirection(driver.DIRN_UP)
-	for driver.ElevGetFloorSensorSignal() == -1 {}
+	for driver.ElevGetFloorSensorSignal() == -1 {
+	}
 	driver.ElevSetMotorDirection(driver.DIRN_STOP)
-	orders.PrevFloor = driver.ElevGetFloorSensorSignal()
-	driver.ElevSetFloorIndicator(orders.PrevFloor)
+	PrevFloor = driver.ElevGetFloorSensorSignal()
+	driver.ElevSetFloorIndicator(PrevFloor)
 	elevState = IDLE_STATE
-	newEvent = driver.Event{driver.NOTHING, 0}	
+	newEvent = driver.Event{driver.NOTHING, 0}
 }

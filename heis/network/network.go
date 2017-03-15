@@ -26,7 +26,7 @@ type Status struct {
 
 const (
 	MAX_NUM_PEERS = 10
-	UDPPasscode   = "svekonrules"
+	UDPPasscode   = "svekonrulesss"
 	peerPort      = 20006
 )
 
