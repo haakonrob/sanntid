@@ -1,0 +1,7 @@
+scp ./coordinator student@129.241.187.151:~/coordinator
+
+//new terminal:
+
+ssh student@129.241.187.151
+
+./coordinator

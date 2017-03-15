@@ -1,0 +1,7 @@
+package RingNode
+
+import(
+
+)
+
+func Init(elevChannel, updateChannel){}

@@ -12,11 +12,11 @@ import (
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	go TCPserver(":33546")
+	go TCPserver(":20000")
 	//go UDPserver(":20012")
 	for {
 		//UDPclient("129.241.187.43:20012")
-		TCPclient("129.241.187.43:33546")
+		TCPclient("129.241.187.48:33546")
 		time.Sleep(time.Second*3)
 				
 	}
