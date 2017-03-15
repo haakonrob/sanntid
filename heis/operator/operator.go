@@ -76,10 +76,7 @@ func Start(eventChan chan driver.Event, coordinatorChan <-chan Orders, completed
 			orders.Completed = newOrders.Completed
 
 		case _ = <-tickChan:
-			if updateFlag {
-				completedOrderChan <- orders
-				updateFlag = false
-			}
+			completedOrderChan <- orders
 			stateTable[elevState][driver.NOTHING]()
 		}
 

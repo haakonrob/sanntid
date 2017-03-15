@@ -57,9 +57,9 @@ func main() {
 	activeElevs = make([]string, 0, MAX_NUM_ELEVS)
 
 	orderChan := make(chan heis.Order, 5)
-	completedOrdersCh := make(chan operator.Orders)
+	completedOrdersCh := make(chan operator.Orders, 1)
 	eventChan := make(chan heis.Event, 5)
-	operatorChan := make(chan operator.Orders)
+	operatorChan := make(chan operator.Orders, 1)
 	networkCh := make(chan network.Status)
 
 	incomingCh := make(chan []byte)
@@ -85,7 +85,7 @@ func main() {
 		}
 	}
 
-	tickChan := time.NewTicker(time.Millisecond * 500).C
+	tickChan := time.NewTicker(time.Millisecond * 1000).C
 
 	resetMask()
 
@@ -129,33 +129,32 @@ func main() {
 			}
 
 		case <-tickChan:
-			//printOrders()
+			printOrders()
 
-			if updateFlag {
-				switch online {
-				case true:
-					msg := Message{
-						SenderID:  localID,
-						ViewCount: 0,
-						Scores:    map[string][2][N_FLOORS]int{},
-						Content:   GlobalMask,
-					}
-					jmsg, _ := json.Marshal(msg)
-					outgoingCh <- jmsg
-
-				case false:
-					applyMaskToGlobalOrders(GlobalMask)
-					takeAllAvailableOrders()
+			//if updateFlag {
+			fmt.Println("Sending")
+			switch online {
+			case true:
+				msg := Message{
+					SenderID:  localID,
+					ViewCount: 0,
+					Scores:    map[string][2][N_FLOORS]int{},
+					Content:   GlobalMask,
 				}
-				updateFlag = false
-				backup.Write(LocalOrders)
-				setLights()
-				resetMask()
-				operatorChan <- LocalOrders
+				jmsg, _ := json.Marshal(msg)
+				outgoingCh <- jmsg
+
+			case false:
+				applyMaskToGlobalOrders(GlobalMask)
+				takeAllAvailableOrders()
 			}
+			//updateFlag = false
+			backup.Write(LocalOrders)
+			setLights()
+			resetMask()
+			operatorChan <- LocalOrders
 
 		case lateOrder := <-timeoutCh:
-			fmt.Println("asdfads")
 			GlobalOrders.Taken[lateOrder.OrderType][lateOrder.Floor] = false
 			//markAsAvailable(lateOrder)
 			if LocalOrders.Pending[lateOrder.OrderType][lateOrder.Floor] {
@@ -168,7 +167,7 @@ func main() {
 /*************************************************************************************************
  Functions for handling and merging LocalOrders and GlobalOrders.
  Most of the complexity is due to the array iteration.
-scp ./coordinator student@129.241.187.151:~/coordinator
+
 *************************************************************************************************/
 
 func setLights() {
@@ -222,15 +221,11 @@ func markAsAvailable(order heis.Order) {
 }
 
 func markAsCompleted(completedOrders operator.Orders) {
-	LocalOrders.Pending = completedOrders.Pending
 	for o := 0; o < 2; o++ {
 		for f := 0; f < N_FLOORS; f++ {
-			LocalOrders.Completed[o][f] = false
-			if o != 2 {
-				if completedOrders.Completed[o][f] {
-					GlobalMask.Taken[o][f] = false
-					updateFlag = true
-				}
+			if completedOrders.Completed[o][f] {
+				GlobalMask.Taken[o][f] = false
+				LocalOrders.Pending[o][f] = false
 			}
 		}
 	}
@@ -266,7 +261,7 @@ func getLocalOrders(scores map[string][2][N_FLOORS]int) {
 	for o := 0; o < 2; o++ {
 		for f := 0; f < N_FLOORS; f++ {
 			if GlobalOrders.Available[o][f] {
-				maxID, max := "", 0
+				maxID, max := activeElevs[0], 0
 				for _, id := range activeElevs {
 					if val, ok := scores[id]; ok {
 						if val[o][f] > max {
@@ -276,12 +271,12 @@ func getLocalOrders(scores map[string][2][N_FLOORS]int) {
 					}
 				}
 				if maxID == localID {
-					//GlobalOrders.Available[o][f] = false
-					//GlobalOrders.Taken[o][f] = true
+					GlobalOrders.Available[o][f] = false
+					GlobalOrders.Taken[o][f] = true
 					LocalOrders.Pending[o][f] = true
 				} else {
-					//GlobalOrders.Available[o][f] = false
-					//GlobalOrders.Taken[o][f] = true
+					GlobalOrders.Available[o][f] = false
+					GlobalOrders.Taken[o][f] = true
 				}
 			}
 		}
@@ -344,5 +339,11 @@ func printOrders() {
 	fmt.Println("UP:    ", LocalOrders.Pending[0])
 	fmt.Println("DOWN:  ", LocalOrders.Pending[1])
 	fmt.Println("COMM:  ", LocalOrders.Pending[2])
+	fmt.Println("--------------------------------------------------------")
+	fmt.Println("--------------------------------------------------------")
+	fmt.Println("LocalOrders Complete:")
+	fmt.Println("UP:    ", LocalOrders.Completed[0])
+	fmt.Println("DOWN:  ", LocalOrders.Completed[1])
+	fmt.Println("COMM:  ", LocalOrders.Completed[2])
 	fmt.Println("--------------------------------------------------------")
 }
