@@ -225,6 +225,7 @@ func markAsCompleted(completedOrders operator.Orders) {
 		for f := 0; f < N_FLOORS; f++ {
 			if completedOrders.Completed[o][f] {
 				GlobalMask.Taken[o][f] = false
+				GlobalOrders.Taken[o][f] = false
 				LocalOrders.Pending[o][f] = false
 			}
 		}

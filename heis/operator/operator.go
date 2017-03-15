@@ -57,15 +57,20 @@ var (
 	newEvent         driver.Event
 	destinationOrder driver.Order
 	updateFlag       bool
+	completedOrderChan chan<- Orders
 )
 
-func Start(eventChan chan driver.Event, coordinatorChan <-chan Orders, completedOrderChan chan<- Orders) {
+func Start(eventChan chan driver.Event, coordinatorChan <-chan Orders, completedOrderChan2 chan<- Orders) {
 
 	Init()
 	destinationOrder.Floor = NONE
 	tickChan := time.NewTicker(time.Second).C
-
+	completedOrderChan = completedOrderChan2
 	for {
+		if updateFlag{
+			completedOrderChan <- orders
+			updateFlag = false
+		}
 		select {
 		case newEvent = <-eventChan:
 			stateTable[elevState][newEvent.Type]()
@@ -76,6 +81,7 @@ func Start(eventChan chan driver.Event, coordinatorChan <-chan Orders, completed
 			orders.Completed = newOrders.Completed
 
 		case _ = <-tickChan:
+			fmt.Println(elevState)
 			completedOrderChan <- orders
 			stateTable[elevState][driver.NOTHING]()
 		}
@@ -112,6 +118,7 @@ func nextOrder() {
 	}
 
 	if foundOrder {
+		
 		if nextOrder.Floor == PrevFloor {
 			completeOrder(PrevFloor)
 		} else if nextOrder.Floor < PrevFloor {

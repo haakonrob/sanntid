@@ -4,6 +4,7 @@ import (
 	"./localip"
 	"./peers"
 	"./ring"
+	_"./bcast"
 	"fmt"
 	"os"
 	"strings"
@@ -34,7 +35,7 @@ var (
 	netStat Status
 	// ringport is currently set to the PID, to
 	// avoid TCP sockets becoming unaavailable after closing.
-	ringport = 20007
+	ringport = 20011
 )
 
 func Monitor(statusCh chan Status, loopBack bool, subnet string, incomingCh chan []byte, outgoingCh chan []byte) {
@@ -49,11 +50,14 @@ func Monitor(statusCh chan Status, loopBack bool, subnet string, incomingCh chan
 	peerTxEnable := make(chan bool)
 
 	bcastMsg := fmt.Sprintf("%s_%s-%s:%d", UDPPasscode, local.ID, local.IP, ringport)
+	
 	go peers.Transmitter(peerPort, bcastMsg, subnet, peerTxEnable)
 	go peers.Receiver(peerPort, UDPPasscode, peerUpdateCh)
 
 	/* Start ring network using TCP */
 	targetCh := make(chan string, 1)
+	//go bcast.Transmitter(ringport, targetCh , outgoingCh)
+	//go bcast.Receiver(ringport, local.ID, incomingCh)
 	go ring.Transmitter(targetCh, outgoingCh)
 	go ring.Receiver(ringport, incomingCh)
 
